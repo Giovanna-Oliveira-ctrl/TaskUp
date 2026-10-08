@@ -151,8 +151,9 @@
 
     load() {
       let raw = null;
+      storageOk = U.storage.persistent;
       try {
-        raw = localStorage.getItem(KEY);
+        raw = U.storage.getItem(KEY);
       } catch (e) {
         storageOk = false;
         console.warn('localStorage indisponível', e);
@@ -163,7 +164,7 @@
         } catch (e) {
           console.error('Dados corrompidos, iniciando do zero', e);
           try {
-            localStorage.setItem(KEY + ':corrupted:' + Date.now(), raw);
+            U.storage.setItem(KEY + ':corrupted:' + Date.now(), raw);
           } catch (_) {}
           state = defaultState();
         }
@@ -200,9 +201,8 @@
     save: U.debounce(() => Store.saveNow(), 150),
 
     saveNow() {
-      if (!storageOk) return;
       try {
-        localStorage.setItem(KEY, JSON.stringify(state));
+        U.storage.setItem(KEY, JSON.stringify(state));
       } catch (e) {
         console.error('Falha ao salvar', e);
         Bus.emit('toast', { text: 'Não foi possível salvar os dados (armazenamento cheio?)', type: 'error' });
@@ -234,7 +234,7 @@
 
     usageBytes() {
       try {
-        return (localStorage.getItem(KEY) || '').length * 2;
+        return (U.storage.getItem(KEY) || '').length * 2;
       } catch (_) {
         return 0;
       }

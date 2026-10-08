@@ -24,6 +24,7 @@
   const NAV_ORDER = Object.keys(VIEWS);
 
   let current = 'dashboard';
+  let rendered = null; // última tela desenhada
   let renderQueued = false;
   let lastDay = U.today();
   let deferredInstall = null;
@@ -38,8 +39,12 @@
     go(view, opts = {}) {
       if (!VIEWS[view]) view = 'dashboard';
       if (view === 'routine' && opts.resetDate) TU.Routine.date = U.today();
-      if (location.hash !== '#/' + view) location.hash = '#/' + view;
-      else App.render(true);
+      current = view;
+      // o endereço (#/tela) é só um bônus: em visualizadores restritos pode ser bloqueado
+      try {
+        if (location.hash !== '#/' + view) history.pushState(null, '', '#/' + view);
+      } catch (_) {}
+      App.render(true);
       document.body.classList.remove('menu-open');
     },
 
@@ -50,8 +55,8 @@
 
     render(scrollTop = false) {
       const view = document.getElementById('view');
-      const changed = current !== App.fromHash();
-      current = App.fromHash();
+      const changed = rendered !== current;
+      rendered = current;
       const keepScroll = !changed && !scrollTop ? window.scrollY : 0;
       const def = VIEWS[current];
       if (changed && current === 'routine') TU.Routine._scrollNow = true;
@@ -261,7 +266,16 @@
         App.applyTheme();
         App.queueRender();
       });
-      window.addEventListener('hashchange', () => App.render(true));
+      const onHash = () => {
+        const v = App.fromHash();
+        if (v !== current) {
+          current = v;
+          App.render(true);
+        }
+      };
+      window.addEventListener('hashchange', onHash);
+      window.addEventListener('popstate', onHash);
+      current = App.fromHash();
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', App.applyTheme);
 
       App.bindEvents();
@@ -278,7 +292,7 @@
       if (p.running && p.endAt && p.endAt <= Date.now()) Pomodoro.finish(true);
 
       setTimeout(() => App.onboarding(), 400);
-      if (!Store.storageOk) UI.toast('Armazenamento local indisponível: seus dados não serão salvos neste modo.', { type: 'error', duration: 8000 });
+      if (!Store.storageOk) UI.toast('Modo de visualização: o armazenamento está bloqueado aqui, então os dados não serão salvos. Baixe o arquivo e abra no navegador para salvar.', { type: 'error', duration: 10000 });
       App.registerSW();
     },
 
@@ -299,6 +313,23 @@
     },
 
     bindEvents() {
+      // Formulários: dispara "submit" manualmente. Alguns visualizadores
+      // (iframes restritos) bloqueiam o envio nativo de formulários.
+      const fakeSubmit = (form) => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      document.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[type="submit"], input[type="submit"]');
+        if (!btn || !btn.form || btn.disabled) return;
+        e.preventDefault();
+        fakeSubmit(btn.form);
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' || e.defaultPrevented || e.isComposing) return;
+        const el = e.target;
+        if (!el.form || el.tagName !== 'INPUT' || ['checkbox', 'radio', 'button', 'submit', 'file'].includes(el.type)) return;
+        e.preventDefault();
+        fakeSubmit(el.form);
+      });
+
       // cliques com data-action
       document.addEventListener('click', (e) => {
         const el = e.target.closest('[data-action]');

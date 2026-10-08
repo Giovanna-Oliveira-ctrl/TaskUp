@@ -210,6 +210,27 @@
   U.COLORS = ['#7c5cff', '#3b82f6', '#06b6d4', '#10b981', '#84cc16', '#f59e0b', '#f97316', '#ef4444', '#ec4899', '#a855f7', '#64748b', '#14b8a6'];
   U.EMOJIS = ['📌', '💼', '📚', '🎓', '🙋', '🛒', '💰', '❤️', '📅', '🚀', '🗂️', '🏃', '🍽️', '💻', '📞', '✉️', '🧹', '🧺', '💊', '🦷', '🧘', '🎯', '🎨', '🎵', '🎮', '📖', '✍️', '🧠', '🐶', '🌱', '🚗', '✈️', '🏠', '🎂', '🎁', '☕', '💡', '🔧', '📝', '⭐'];
 
+  /* ---------- Armazenamento seguro ----------
+     Em visualizadores restritos (iframes sem permissão), acessar
+     localStorage lança erro. Nesse caso usamos memória. */
+  const memory = {};
+  let native = null;
+  try {
+    native = window.localStorage;
+    const probe = '__taskup_probe__';
+    native.setItem(probe, '1');
+    native.removeItem(probe);
+  } catch (_) {
+    native = null;
+  }
+  U.storage = {
+    persistent: !!native,
+    getItem: (k) => (native ? native.getItem(k) : k in memory ? memory[k] : null),
+    setItem: (k, v) => (native ? native.setItem(k, v) : (memory[k] = String(v))),
+    removeItem: (k) => (native ? native.removeItem(k) : delete memory[k]),
+    keys: () => (native ? Array.from({ length: native.length }, (_, i) => native.key(i)) : Object.keys(memory)),
+  };
+
   TU.U = U;
   TU.Bus = Bus;
 })();

@@ -79,7 +79,7 @@
     /* ---------- Cópias automáticas no próprio navegador ---------- */
     snapshot(label = U.today()) {
       try {
-        localStorage.setItem(SNAP_PREFIX + label, JSON.stringify(Store.state));
+        U.storage.setItem(SNAP_PREFIX + label, JSON.stringify(Store.state));
         Backup.pruneSnapshots();
       } catch (e) {
         console.warn('Snapshot falhou', e);
@@ -89,19 +89,18 @@
     listSnapshots() {
       const out = [];
       try {
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i);
+        U.storage.keys().forEach((k) => {
           if (k && k.startsWith(SNAP_PREFIX)) out.push(k.slice(SNAP_PREFIX.length));
-        }
+        });
       } catch (_) {}
       return out.sort().reverse();
     },
 
     pruneSnapshots() {
       const daily = Backup.listSnapshots().filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k));
-      daily.slice(MAX_SNAPSHOTS).forEach((k) => localStorage.removeItem(SNAP_PREFIX + k));
+      daily.slice(MAX_SNAPSHOTS).forEach((k) => U.storage.removeItem(SNAP_PREFIX + k));
       const other = Backup.listSnapshots().filter((k) => !/^\d{4}-\d{2}-\d{2}$/.test(k));
-      other.slice(2).forEach((k) => localStorage.removeItem(SNAP_PREFIX + k));
+      other.slice(2).forEach((k) => U.storage.removeItem(SNAP_PREFIX + k));
     },
 
     autoSnapshot() {
@@ -110,7 +109,7 @@
     },
 
     async restoreSnapshot(label) {
-      const raw = localStorage.getItem(SNAP_PREFIX + label);
+      const raw = U.storage.getItem(SNAP_PREFIX + label);
       if (!raw) return;
       const ok = await UI.confirm({ title: 'Restaurar cópia automática?', text: `Cópia: <strong>${U.escape(label)}</strong>. Os dados atuais serão substituídos.`, okText: 'Restaurar', icon: '🕰️' });
       if (!ok) return;

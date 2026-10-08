@@ -64,3 +64,11 @@ assets/sounds/        # (sons são sintetizados — veja o README da pasta)
 
 Os scripts são carregados como scripts clássicos (não módulos ES) de propósito, para que o app funcione ao abrir o `index.html` direto do disco.
 Ao alterar arquivos, troque `CACHE_VERSION` em `service-worker.js` para que o app instalado receba a atualização.
+
+## Versão em arquivo único
+
+Para gerar um único `TaskUp.html` com tudo embutido (fácil de enviar ou abrir em qualquer lugar):
+
+```bash
+python3 tools/build-single.py   # gera dist/TaskUp.html
+```
