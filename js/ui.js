@@ -69,6 +69,9 @@
       close(result) {
         if (closed) return;
         closed = true;
+        // bloqueia novos cliques/Enter durante a animação de saída (evita envio duplo)
+        wrap.classList.add('closing');
+        wrap.inert = true;
         wrap.classList.remove('show');
         const i = stack.indexOf(api);
         if (i >= 0) stack.splice(i, 1);
@@ -287,7 +290,7 @@
     return `
       <div class="emoji-picker" data-name="${name}">
         <input type="hidden" name="${name}" value="${U.escape(current || '')}">
-        <button type="button" class="emoji-current" aria-label="Escolher emoji">${current || '➕'}</button>
+        <button type="button" class="emoji-current" aria-label="Escolher emoji">${U.escape(current) || '➕'}</button>
         <div class="emoji-grid" hidden>
           <button type="button" class="emoji-opt" data-emoji="">∅</button>
           ${U.EMOJIS.map((e) => `<button type="button" class="emoji-opt" data-emoji="${e}">${e}</button>`).join('')}
@@ -326,7 +329,7 @@
             <input type="radio" name="${name}" value="${c}" ${c === current ? 'checked' : ''}><span></span></label>`
         ).join('')}
         <label class="color-opt color-custom" title="Cor personalizada">
-          <input type="color" name="${name}-custom" value="${current || '#7c5cff'}">
+          <input type="color" name="${name}-custom" value="${/^#[0-9a-f]{6}$/i.test(current || '') ? current : '#7c5cff'}">
         </label>
       </div>`;
   }

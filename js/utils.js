@@ -32,9 +32,10 @@
       d.setDate(d.getDate() + n);
       return U.dateKey(d);
     },
-    addMonths(key, n) {
+    /** Soma meses. anchorDay mantém o dia original (ex.: 31) sem "escorregar" mês a mês. */
+    addMonths(key, n, anchorDay) {
       const d = U.parseDateKey(key);
-      const day = d.getDate();
+      const day = anchorDay || d.getDate();
       d.setDate(1);
       d.setMonth(d.getMonth() + n);
       const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();

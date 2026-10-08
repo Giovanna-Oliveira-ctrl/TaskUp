@@ -64,25 +64,38 @@
   }
 
   /* ---------------- Recorrência ---------------- */
+  /** Dia do mês que a série repete (evita 31 → 28 → 28...). */
+  function recurAnchor(task) {
+    return task.recurDay || (task.date ? +task.date.slice(8) : U.parseDateKey(U.today()).getDate());
+  }
+
+  /** Próxima ocorrência: sempre depois de hoje (concluir algo atrasado não gera outra atrasada). */
   function nextDate(task) {
     const base = task.date || U.today();
-    switch (task.recurrence) {
-      case 'daily':
-        return U.addDays(base, 1);
-      case 'weekdays': {
-        let d = U.addDays(base, 1);
-        while ([0, 6].includes(U.parseDateKey(d).getDay())) d = U.addDays(d, 1);
-        return d;
+    const anchor = recurAnchor(task);
+    const step = (d) => {
+      switch (task.recurrence) {
+        case 'daily':
+          return U.addDays(d, 1);
+        case 'weekdays': {
+          let x = U.addDays(d, 1);
+          while ([0, 6].includes(U.parseDateKey(x).getDay())) x = U.addDays(x, 1);
+          return x;
+        }
+        case 'weekly':
+          return U.addDays(d, 7);
+        case 'monthly':
+          return U.addMonths(d, 1, anchor);
+        case 'yearly':
+          return U.addMonths(d, 12, anchor);
+        default:
+          return null;
       }
-      case 'weekly':
-        return U.addDays(base, 7);
-      case 'monthly':
-        return U.addMonths(base, 1);
-      case 'yearly':
-        return U.addMonths(base, 12);
-      default:
-        return null;
-    }
+    };
+    let d = step(base);
+    const today = U.today();
+    for (let guard = 0; d && d <= today && guard < 5000; guard++) d = step(d);
+    return d;
   }
 
   /* ---------------- Mutations ---------------- */
@@ -114,11 +127,13 @@
       Store.update((s) => {
         const t = s.tasks.find((x) => x.id === id);
         if (!t) return;
+        // mudou a data: a série recorrente passa a seguir o novo dia
+        if (patch.date !== undefined && patch.date !== t.date) patch = { ...patch, recurDay: null };
         // se data/hora mudou, permite notificar de novo
         if ((patch.date !== undefined && patch.date !== t.date) || (patch.time !== undefined && patch.time !== t.time)) {
           Object.keys(s.notified).forEach((k) => k.startsWith(id + '|') && delete s.notified[k]);
         }
-        Object.assign(t, patch);
+        Object.assign(t, patch, { updatedAt: new Date().toISOString() });
       });
     },
 
@@ -127,14 +142,22 @@
       const idx = s.tasks.findIndex((t) => t.id === id);
       if (idx < 0) return;
       const removed = s.tasks[idx];
-      Store.update((st) => st.tasks.splice(idx, 1));
+      Store.update((st) => {
+        st.tasks.splice(idx, 1);
+        Game.onTaskRemoved(removed);
+      });
       if (Store.state.pomodoro.taskId === id) Store.update((st) => (st.pomodoro.taskId = null), { silent: true });
       if (undo) {
         UI.toast(`"${removed.title}" excluída`, {
           icon: '🗑️',
           action: {
             label: 'Desfazer',
-            fn: () => Store.update((st) => st.tasks.splice(Math.min(idx, st.tasks.length), 0, removed)),
+            fn: () =>
+              Store.update((st) => {
+                if (st.tasks.some((x) => x.id === removed.id)) return;
+                st.tasks.splice(Math.min(idx, st.tasks.length), 0, removed);
+                if (U.dateKey(new Date(removed.createdAt)) === U.today() && !removed.spawnedFrom) Game.onTaskCreated();
+              }),
           },
           duration: 5000,
         });
@@ -173,6 +196,11 @@
                 coinsAwarded: 0,
                 spawnedNext: null,
                 snoozeUntil: null,
+                updatedAt: null,
+                spawnedFrom: task.id,
+                recurDay: recurAnchor(task),
+                wasOnTime: false,
+                wasMorning: false,
                 subtasks: task.subtasks.map((st) => ({ ...st, id: U.uid(), done: false })),
               });
               s.tasks.push(next);
@@ -191,11 +219,15 @@
           task.completedAt = null;
           task.xpAwarded = 0;
           task.coinsAwarded = 0;
-          // remove a próxima ocorrência gerada se ainda não foi mexida
+          // remove a próxima ocorrência gerada se ainda não foi concluída nem editada;
+          // caso contrário mantém o vínculo para não gerar uma duplicata ao concluir de novo
           if (task.spawnedNext) {
-            const i = s.tasks.findIndex((x) => x.id === task.spawnedNext && !x.done);
-            if (i >= 0) s.tasks.splice(i, 1);
-            task.spawnedNext = null;
+            const i = s.tasks.findIndex((x) => x.id === task.spawnedNext);
+            if (i < 0) task.spawnedNext = null;
+            else if (!s.tasks[i].done && !s.tasks[i].updatedAt) {
+              s.tasks.splice(i, 1);
+              task.spawnedNext = null;
+            }
           }
         });
         Sound.play('undo');
@@ -218,7 +250,7 @@
       if (t && !t.done && t.subtasks.length && t.subtasks.every((x) => x.done)) {
         UI.toast('Todas as subtarefas feitas! Concluir a tarefa?', {
           icon: '🧩',
-          action: { label: 'Concluir', fn: () => Tasks.toggle(taskId) },
+          action: { label: 'Concluir', fn: () => Tasks.get(taskId) && !Tasks.get(taskId).done && Tasks.toggle(taskId) },
         });
       }
     },
@@ -287,15 +319,16 @@
           let y = m[3] ? +m[3] : now.getFullYear();
           if (y < 100) y += 2000;
           const d = new Date(y, +m[2] - 1, +m[1]);
-          if (!m[3] && U.dateKey(d) < today) d.setFullYear(y + 1);
-          if (!isNaN(d)) {
+          const valid = d.getDate() === +m[1] && d.getMonth() === +m[2] - 1;
+          if (valid && !m[3] && U.dateKey(d) < today) d.setFullYear(y + 1);
+          if (valid && d.getDate() === +m[1]) {
             out.date = U.dateKey(d);
             t = t.replace(m[0], ' ');
           }
         }
       }
       // horário: 14h, 14:30, 9h30, às 8
-      const tm = t.match(/\s(?:[àa]s\s)?(\d{1,2})(?::(\d{2})|h(\d{2})?)(?=\s)/i);
+      const tm = t.match(/\s(?:[àa]s\s)?(\d{1,2})(?::(\d{2})|h(\d{2})?)(?=\s)/i) || t.match(/\s[àa]s\s(\d{1,2})()()(?=\s)/i);
       if (tm) {
         const h = +tm[1];
         const mi = +(tm[2] || tm[3] || 0);
@@ -345,6 +378,11 @@
           <div class="task-body" data-action="edit-task" data-id="${t.id}" tabindex="0" role="button">
             <div class="task-title">${t.emoji ? `<span class="task-emoji">${t.emoji}</span>` : ''}<span>${U.escape(t.title)}</span><span class="prio-dot" title="Prioridade ${PRIORITIES[t.priority].label}"></span></div>
             <div class="task-meta">${meta.join('')}</div>
+            ${!compact && !t.done && t.subtasks.length ? `<ul class="subtasks-inline">${t.subtasks
+              .map(
+                (st) => `<li class="${st.done ? 'done' : ''}"><button class="sub-check" data-action="toggle-sub" data-task="${t.id}" data-sub="${st.id}" aria-pressed="${st.done}" aria-label="${st.done ? 'Desmarcar' : 'Concluir'} subtarefa: ${U.escape(st.title)}">${st.done ? '✓' : ''}</button><span>${U.escape(st.title)}</span></li>`
+              )
+              .join('')}</ul>` : ''}
           </div>
           <div class="task-actions">
             ${!t.done ? `<button class="icon-btn" data-action="pomo-task" data-id="${t.id}" title="Iniciar Pomodoro">🍅</button>` : ''}
@@ -537,6 +575,16 @@
             };
             if (data.recurrence !== 'none' && !data.date) data.date = U.today();
             if (editing) {
+              // subtarefas marcadas/desmarcadas pelo formulário também contam (XP e missão)
+              if (!editing.done) {
+                let delta = 0;
+                data.subtasks.forEach((st) => {
+                  const old = editing.subtasks.find((o) => o.id === st.id);
+                  delta += (st.done ? 1 : 0) - (old && old.done ? 1 : 0);
+                });
+                editing.subtasks.forEach((o) => o.done && !data.subtasks.some((n) => n.id === o.id) && delta--);
+                if (delta) Store.update((st) => Game.onSubtaskCompleted(st, delta), { silent: true });
+              }
               Tasks.update(editing.id, data);
               UI.toast('Tarefa atualizada', { type: 'success', duration: 1800 });
             } else {
@@ -721,6 +769,7 @@
         e.preventDefault();
         const v = qa.q.value.trim();
         if (!v) return;
+        qa.q.value = '';
         Tasks.quickAdd(v, { categoryId: f.category !== 'all' ? f.category : undefined });
         setTimeout(() => {
           const inp = document.querySelector('[data-form="quick-add"] input');

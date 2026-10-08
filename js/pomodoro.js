@@ -34,8 +34,11 @@
     },
 
     start() {
+      const fresh = P().remaining === null || P().remaining === undefined;
       const rem = Pomodoro.remaining();
       Store.update((s) => {
+        // guarda a duração real da sessão (mudar as configurações depois não altera a contagem)
+        if (fresh || !s.pomodoro.length) s.pomodoro.length = rem / 60;
         s.pomodoro.running = true;
         s.pomodoro.endAt = Date.now() + rem * 1000;
         s.pomodoro.remaining = null;
@@ -63,6 +66,7 @@
         s.pomodoro.running = false;
         s.pomodoro.endAt = null;
         s.pomodoro.remaining = null;
+        s.pomodoro.length = null;
       });
     },
 
@@ -72,6 +76,7 @@
         s.pomodoro.running = false;
         s.pomodoro.endAt = null;
         s.pomodoro.remaining = null;
+        s.pomodoro.length = null;
       });
       if (autostart) Pomodoro.start();
     },
@@ -117,7 +122,7 @@
       Store.update((s) => {
         if (mode === 'focus') {
           if (completed) {
-            reward = Game.onPomodoro(s, +cfg().focus);
+            reward = Game.onPomodoro(s, Math.round(s.pomodoro.length || +cfg().focus));
             if (task) {
               const t = s.tasks.find((x) => x.id === task.id);
               if (t) t.pomodoros = (t.pomodoros || 0) + 1;
@@ -126,6 +131,7 @@
           s.pomodoro.cycle = (s.pomodoro.cycle || 0) + (completed ? 1 : 0);
           next = completed && s.pomodoro.cycle % Math.max(1, +cfg().longEvery) === 0 ? 'long' : 'short';
         }
+        s.pomodoro.length = null;
         s.pomodoro.mode = next;
         s.pomodoro.running = false;
         s.pomodoro.endAt = null;
@@ -142,7 +148,7 @@
           Game.celebrate({});
           Game.checkAchievements();
           if (task && !task.done) {
-            UI.toast(`Concluiu "${task.title}"?`, { icon: '✅', duration: 8000, action: { label: 'Marcar feita', fn: () => window.TU.Tasks.toggle(task.id) } });
+            UI.toast(`Concluiu "${task.title}"?`, { icon: '✅', duration: 8000, action: { label: 'Marcar feita', fn: () => window.TU.Tasks.get(task.id) && !window.TU.Tasks.get(task.id).done && window.TU.Tasks.toggle(task.id) } });
           }
         }
         Game.afterXp(levelBefore);
@@ -167,7 +173,8 @@
       if (timeEl && timeEl.textContent !== text) timeEl.textContent = text;
       const ring = document.getElementById('pomo-ring');
       if (ring) {
-        const frac = rem / Pomodoro.duration();
+        const total = p.length ? p.length * 60 : Pomodoro.duration();
+        const frac = Math.min(1, rem / total);
         ring.style.strokeDashoffset = String(CIRC * (1 - frac));
       }
       // mini chip no topo
@@ -245,7 +252,7 @@
               <div class="card-head"><h3>📊 Hoje</h3></div>
               <div class="stat-row">
                 <div><strong>${todayPomos}</strong><span class="muted small">pomodoros</span></div>
-                <div><strong>${U.formatDuration(todayPomos * +cfg().focus) || '0 min'}</strong><span class="muted small">de foco</span></div>
+                <div><strong>${U.formatDuration((s.game.focusByDate || {})[today] || 0) || '0 min'}</strong><span class="muted small">de foco</span></div>
                 <div><strong>${s.game.totalPomodoros}</strong><span class="muted small">no total</span></div>
               </div>
             </div>
@@ -281,11 +288,14 @@
   Actions['pomo-chip'] = () => window.TU.App.go('pomodoro');
 
   window.TU.Changes = window.TU.Changes || {};
-  window.TU.Changes['pomo-mode'] = (el) => {
+  window.TU.Changes['pomo-mode'] = async (el) => {
     const p = P();
-    if (p.running && !confirm('Trocar de modo vai interromper o timer atual. Continuar?')) {
-      Bus.emit('rerender');
-      return;
+    if (p.running) {
+      const ok = await UI.confirm({ title: 'Trocar de modo?', text: 'Isso interrompe o timer atual.', okText: 'Trocar', icon: '🍅' });
+      if (!ok) {
+        Bus.emit('rerender');
+        return;
+      }
     }
     Pomodoro.setMode(el.value);
   };

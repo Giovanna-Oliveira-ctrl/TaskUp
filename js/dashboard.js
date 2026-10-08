@@ -123,7 +123,7 @@
                 <div class="row between small"><strong>Nível ${li.level} · ${li.title}</strong><span class="muted">${li.current}/${li.needed} XP</span></div>
                 <div class="progress sm xp"><span style="width:${li.pct}%"></span></div>
               </div>
-              <span class="pill">🪙 ${s.game.coins}</span>
+              <span class="pill">🪙 ${Math.max(0, s.game.coins)}</span>
             </div>` : ''}
           </section>
 
@@ -177,6 +177,7 @@
         e.preventDefault();
         const v = form.q.value.trim();
         if (!v) return;
+        form.q.value = '';
         Tasks.quickAdd(v, { date: today });
         setTimeout(() => document.querySelector('[data-form="dash-quick"] input')?.focus(), 30);
       });

@@ -3065,3 +3065,40 @@ select.input {
   white-space: nowrap;
   width: 1%;
 }
+
+.subtasks-inline {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.subtasks-inline li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-2);
+}
+.subtasks-inline li.done span {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.sub-check {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  border: 2px solid var(--border);
+  background: transparent;
+  color: #fff;
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+.subtasks-inline li.done .sub-check {
+  background: var(--success);
+  border-color: var(--success);
+}

@@ -55,7 +55,8 @@
             e.preventDefault();
             const name = form.name.value.trim();
             if (!name) return;
-            const data = { name, emoji: form.emoji.value || '📌', color: color() };
+            const { name: n, emoji: em, color: co } = Store.sanitizeCategory({ name, emoji: form.emoji.value || '📌', color: color() });
+            const data = { name: n, emoji: em, color: co };
             if (editing) {
               Store.update((s) => Object.assign(s.categories.find((x) => x.id === editing.id), data));
               UI.toast('Categoria atualizada', { type: 'success' });

@@ -102,7 +102,10 @@
     snooze(id, minutes = 10) {
       Store.update((s) => {
         const t = s.tasks.find((x) => x.id === id);
-        if (t) t.snoozeUntil = Date.now() + minutes * 60000;
+        if (!t) return;
+        t.snoozeUntil = Date.now() + minutes * 60000;
+        // o lembrete adiado substitui o aviso "Agora" do horário exato
+        if (t.date && t.time) s.notified[`${t.id}|${t.date}|${t.time}|d`] = Date.now();
       }, { silent: true });
       UI.toast(`Ok! Lembro de novo em ${minutes} min.`, { icon: '😴', duration: 2500 });
     },
@@ -122,6 +125,7 @@
         const created = new Date(t.createdAt).getTime();
         const snooze = { label: 'Adiar 10 min', fn: () => Notify.snooze(t.id, 10) };
         // lembrete adiado ("soneca")
+        const snoozed = !!t.snoozeUntil;
         if (t.snoozeUntil && now >= t.snoozeUntil) {
           Store.update((st) => {
             const x = st.tasks.find((y) => y.id === t.id);
@@ -141,7 +145,7 @@
           }
           // aviso no horário exato, se o lembrete foi antecipado
           const keyDue = base + '|d';
-          if (t.reminder > 0 && now >= due && now - due < LATE && created <= due && !notified[keyDue] && !t.snoozeUntil) {
+          if (t.reminder > 0 && now >= due && now - due < LATE && created <= due && !notified[keyDue] && !snoozed) {
             notified[keyDue] = now;
             changed = true;
             Notify.show(`⏰ Agora: ${t.emoji ? t.emoji + ' ' : ''}${t.title}`, 'Bora fazer acontecer!', { tag: base + 'd', sound: 'reminder', data: { view: 'routine' }, action: snooze });

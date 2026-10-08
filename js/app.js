@@ -61,8 +61,11 @@
       const def = VIEWS[current];
       if (changed && current === 'routine') TU.Routine._scrollNow = true;
       view.dataset.view = current;
+      // preserva o que o usuário está digitando quando a tela é redesenhada em segundo plano
+      const typing = !changed && App.captureFocus(view);
       try {
         def.mod().render(view);
+        if (typing) App.restoreFocus(view, typing);
       } catch (e) {
         console.error(e);
         view.innerHTML = `<div class="card empty-state"><div class="empty-emoji">🐛</div><h3>Ops! Algo deu errado.</h3><p class="muted">${U.escape(e.message)}</p></div>`;
@@ -74,6 +77,34 @@
         window.scrollTo(0, 0);
       } else window.scrollTo(0, keepScroll);
       App.renderChrome();
+    },
+
+    /** Guarda campo focado (valor, cursor) para restaurar após redesenhar. */
+    captureFocus(view) {
+      const el = document.activeElement;
+      if (!el || !view.contains(el) || !el.matches('input:not([type=checkbox]):not([type=radio]):not([type=file]), textarea')) return null;
+      let sel = null;
+      if (el.dataset.filter) sel = `[data-filter="${el.dataset.filter}"]`;
+      else if (el.form && el.form.dataset.form && el.name) sel = `[data-form="${el.form.dataset.form}"] [name="${el.name}"]`;
+      else if (el.id) sel = '#' + CSS.escape(el.id);
+      if (!sel) return null;
+      let start = null;
+      let end = null;
+      try {
+        start = el.selectionStart;
+        end = el.selectionEnd;
+      } catch (_) {}
+      return { sel, value: el.value, start, end };
+    },
+
+    restoreFocus(view, f) {
+      const el = view.querySelector(f.sel);
+      if (!el) return;
+      el.value = f.value;
+      el.focus({ preventScroll: true });
+      try {
+        if (f.start !== null) el.setSelectionRange(f.start, f.end);
+      } catch (_) {}
     },
 
     queueRender() {
@@ -126,7 +157,7 @@
               </div>
             </div>
             ${st.showXP ? `<div class="progress sm xp"><span style="width:${li.pct}%"></span></div>
-            <div class="sp-stats"><span>⭐ ${li.xp} XP</span>${st.streaks ? `<span>🔥 ${streak}</span>` : ''}<span>🪙 ${s.game.coins}</span></div>` : ''}`;
+            <div class="sp-stats"><span>⭐ ${li.xp} XP</span>${st.streaks ? `<span>🔥 ${streak}</span>` : ''}<span>🪙 ${Math.max(0, s.game.coins)}</span></div>` : ''}`;
         } else prof.hidden = true;
       }
       const xpChip = document.getElementById('xp-chip');
@@ -337,6 +368,10 @@
       const today = U.today();
       if (today !== lastDay) {
         if (TU.Routine.date === lastDay) TU.Routine.date = today;
+        if (TU.Calendar.selected === lastDay) {
+          TU.Calendar.selected = today;
+          TU.Calendar.month = today.slice(0, 8) + '01';
+        }
         lastDay = today;
         TU.Dashboard._motivation = null;
         Game.ensureMissions();
@@ -352,7 +387,13 @@
     bindEvents() {
       // Formulários: dispara "submit" manualmente. Alguns visualizadores
       // (iframes restritos) bloqueiam o envio nativo de formulários.
-      const fakeSubmit = (form) => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      const fakeSubmit = (form) => {
+        if (form.closest('.modal-backdrop.closing')) return; // janela já fechando
+        const now = Date.now();
+        if (form._lastSubmit && now - form._lastSubmit < 400) return; // clique duplo
+        form._lastSubmit = now;
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      };
       document.addEventListener('click', (e) => {
         const btn = e.target.closest('button[type="submit"], input[type="submit"]');
         if (!btn || !btn.form || btn.disabled) return;

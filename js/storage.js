@@ -78,6 +78,7 @@
         xpByDate: {},
         completedByDate: {},
         pomodorosByDate: {},
+        focusByDate: {},
         achievements: {},
         missions: { date: null, list: [] },
         weekly: { week: null, claimed: false },
@@ -89,6 +90,7 @@
         endAt: null,
         remaining: null, // segundos restantes quando pausado
         taskId: null,
+        length: null, // duração (min) da sessão em andamento
         cycle: 0, // focos concluídos no ciclo atual
       },
       notified: {},
@@ -113,7 +115,63 @@
     return target;
   }
 
+  /* ---------- Sanitização (dados importados/corrompidos) ---------- */
+  const RE_DATE = /^\d{4}-\d{2}-\d{2}$/;
+  const RE_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const RE_ID = /^[\w-]{1,64}$/;
+  const isId = (v) => typeof v === 'string' && RE_ID.test(v);
+  const RE_COLOR = /^#[0-9a-f]{3,8}$/i;
+  const PRIOS = ['low', 'medium', 'high'];
+  const RECS = ['none', 'daily', 'weekdays', 'weekly', 'monthly', 'yearly'];
+  const str = (v, max = 500) => (typeof v === 'string' ? v : v == null ? '' : String(v)).slice(0, max);
+  /** Emoji: texto curto sem caracteres de marcação. */
+  const emoji = (v) => str(v, 16).replace(/[<>"'&`=\\/]/g, '').trim();
+  const num = (v, def, min = 0, max = 1e9) => (Number.isFinite(+v) && v !== null && v !== '' ? Math.min(max, Math.max(min, +v)) : def);
+  const isoOrNull = (v) => (typeof v === 'string' && !isNaN(Date.parse(v)) ? v : null);
+  const color = (v, def = '#64748b') => (typeof v === 'string' && RE_COLOR.test(v) ? v : def);
+
+  function sanitizeTask(t) {
+    if (!isId(t.id)) t.id = U.uid();
+    t.title = str(t.title, 300).trim() || 'Tarefa';
+    t.emoji = emoji(t.emoji);
+    t.notes = str(t.notes, 5000);
+    t.categoryId = isId(t.categoryId) ? String(t.categoryId) : 'cat-outros';
+    if (!PRIOS.includes(t.priority)) t.priority = 'medium';
+    if (!RECS.includes(t.recurrence)) t.recurrence = 'none';
+    t.date = typeof t.date === 'string' && RE_DATE.test(t.date) ? t.date : null;
+    t.time = typeof t.time === 'string' && RE_TIME.test(t.time) ? t.time : null;
+    t.duration = num(t.duration, 30, 0, 1440);
+    t.reminder = t.reminder === null || t.reminder === undefined || t.reminder === '' ? null : num(t.reminder, null, 0, 10080);
+    t.subtasks = (Array.isArray(t.subtasks) ? t.subtasks : [])
+      .filter((x) => x && typeof x === 'object')
+      .map((x) => ({ id: isId(x.id) ? String(x.id) : U.uid(), title: str(x.title, 300), done: !!x.done }));
+    t.done = !!t.done;
+    t.completedAt = isoOrNull(t.completedAt);
+    t.createdAt = isoOrNull(t.createdAt) || new Date().toISOString();
+    t.updatedAt = isoOrNull(t.updatedAt);
+    t.pomodoros = num(t.pomodoros, 0, 0, 1e6);
+    t.xpAwarded = num(t.xpAwarded, 0, 0, 1e4);
+    t.coinsAwarded = num(t.coinsAwarded, 0, 0, 1e4);
+    t.spawnedNext = isId(t.spawnedNext) ? String(t.spawnedNext) : null;
+    t.snoozeUntil = Number.isFinite(t.snoozeUntil) ? t.snoozeUntil : null;
+    t.recurDay = Number.isInteger(t.recurDay) && t.recurDay >= 1 && t.recurDay <= 31 ? t.recurDay : null;
+    return t;
+  }
+
+  function sanitizeCategory(c) {
+    return {
+      id: isId(c && c.id) ? String(c.id) : 'c-' + U.uid(),
+      name: str(c && c.name, 40).trim() || 'Categoria',
+      emoji: emoji(c && c.emoji) || '📌',
+      color: color(c && c.color),
+    };
+  }
+
   function normalizeTask(t) {
+    return sanitizeTask(normalizeTaskRaw(t));
+  }
+
+  function normalizeTaskRaw(t) {
     return Object.assign(
       {
         id: U.uid(),
@@ -136,6 +194,7 @@
         coinsAwarded: 0,
         spawnedNext: null,
         snoozeUntil: null,
+        updatedAt: null,
       },
       t
     );
@@ -143,6 +202,8 @@
 
   let state = null;
   let storageOk = true;
+  let dirty = false; // há alterações ainda não gravadas
+  const debouncedSave = U.debounce(() => dirty && Store.saveNow(), 150);
 
   const Store = {
     KEY,
@@ -150,6 +211,7 @@
     DEFAULT_SETTINGS,
     defaultState,
     normalizeTask,
+    sanitizeCategory,
 
     load() {
       let raw = null;
@@ -182,13 +244,45 @@
         throw new Error('Formato inválido');
       }
       const s = mergeDefaults(obj, defaultState());
-      s.tasks = s.tasks.map(normalizeTask);
+      s.tasks = s.tasks.filter((t) => t && typeof t === 'object').map(normalizeTask);
+      // ids duplicados quebrariam edição/remoção
+      const seen = new Set();
+      s.tasks.forEach((t) => {
+        if (seen.has(t.id)) t.id = U.uid();
+        seen.add(t.id);
+      });
       if (!Array.isArray(s.categories) || !s.categories.length) {
         s.categories = DEFAULT_CATEGORIES.map((c) => ({ ...c }));
       }
+      s.categories = s.categories.filter((c) => c && typeof c === 'object').map(sanitizeCategory);
       if (!s.categories.some((c) => c.id === 'cat-outros')) {
         s.categories.push({ ...DEFAULT_CATEGORIES[DEFAULT_CATEGORIES.length - 1] });
       }
+      // configurações e jogo
+      const st = s.settings;
+      const G = window.TU.Game;
+      if (G && !G.MASCOTS[st.mascot]) st.mascot = '🐣';
+      if (G && !G.ACCENTS[st.accent]) st.accent = 'violeta';
+      if (!['auto', 'light', 'dark'].includes(st.theme)) st.theme = 'auto';
+      st.name = str(st.name, 40);
+      if (!RE_TIME.test(st.dailySummaryTime)) st.dailySummaryTime = '08:00';
+      st.volume = num(st.volume, 0.6, 0, 1);
+      ['focus', 'short', 'long', 'longEvery'].forEach((k) => (st.pomodoro[k] = num(st.pomodoro[k], DEFAULT_SETTINGS.pomodoro[k], 1, 180)));
+      const g = s.game;
+      ['xp', 'streak', 'bestStreak', 'totalCompleted', 'totalPomodoros', 'focusMinutes'].forEach((k) => (g[k] = num(g[k], 0, 0, 1e9)));
+      g.coins = num(g.coins, 0, -1e6, 1e9);
+      if (G) {
+        g.unlocked.accents = (Array.isArray(g.unlocked.accents) ? g.unlocked.accents : []).filter((k) => G.ACCENTS[k]);
+        g.unlocked.mascots = (Array.isArray(g.unlocked.mascots) ? g.unlocked.mascots : []).filter((k) => G.MASCOTS[k]);
+      }
+      if (!g.unlocked.accents.includes('violeta')) g.unlocked.accents.unshift('violeta');
+      if (!g.unlocked.mascots.includes('🐣')) g.unlocked.mascots.unshift('🐣');
+      if (g.lastActiveDate && !RE_DATE.test(g.lastActiveDate)) g.lastActiveDate = null;
+      ['xpByDate', 'completedByDate', 'pomodorosByDate', 'focusByDate', 'achievements', 'notified'].forEach((k) => {
+        const o = k === 'notified' ? s : g;
+        if (!o[k] || typeof o[k] !== 'object' || Array.isArray(o[k])) o[k] = {};
+      });
+      if (!Array.isArray(g.missions.list)) g.missions = { date: null, list: [] };
       s.version = VERSION;
       return s;
     },
@@ -200,9 +294,13 @@
       return storageOk;
     },
 
-    save: U.debounce(() => Store.saveNow(), 150),
+    save() {
+      dirty = true;
+      debouncedSave();
+    },
 
     saveNow() {
+      dirty = false;
       try {
         U.storage.setItem(KEY, JSON.stringify(state));
       } catch (e) {
@@ -243,10 +341,21 @@
     },
   };
 
-  // Salva imediatamente ao sair / esconder a página
-  window.addEventListener('pagehide', () => state && Store.saveNow());
+  // Salva imediatamente ao sair / esconder a página (só se houver algo pendente,
+  // para uma aba antiga não sobrescrever dados mais novos de outra aba)
+  window.addEventListener('pagehide', () => state && dirty && Store.saveNow());
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && state) Store.saveNow();
+    if (document.visibilityState === 'hidden' && state && dirty) Store.saveNow();
+  });
+  // Outra aba (ou o app instalado) alterou os dados: recarrega
+  window.addEventListener('storage', (e) => {
+    if (e.key !== KEY || !e.newValue || !state) return;
+    try {
+      state = Store.hydrate(JSON.parse(e.newValue));
+      dirty = false;
+      Bus.emit('change', state);
+      Bus.emit('theme');
+    } catch (_) {}
   });
 
   window.TU.Store = Store;

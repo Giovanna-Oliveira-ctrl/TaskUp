@@ -133,7 +133,9 @@
 
   function addXp(g, date, xp, coins) {
     g.xp = Math.max(0, g.xp + xp);
-    g.coins = Math.max(0, g.coins + coins);
+    // moedas podem ficar negativas ("dívida") se forem gastas e a tarefa for desfeita;
+    // a interface mostra no mínimo 0 e novas recompensas abatem a dívida
+    g.coins += coins;
     g.xpByDate[date] = Math.max(0, (g.xpByDate[date] || 0) + xp);
   }
 
@@ -155,9 +157,11 @@
 
   /** Recalcula sequência quando um dia fica sem tarefas concluídas (desfazer). */
   function recomputeStreak(g) {
-    const days = Object.keys(g.completedByDate)
-      .filter((d) => g.completedByDate[d] > 0)
-      .sort();
+    const active = new Set([
+      ...Object.keys(g.completedByDate).filter((d) => g.completedByDate[d] > 0),
+      ...Object.keys(g.pomodorosByDate || {}).filter((d) => g.pomodorosByDate[d] > 0),
+    ]);
+    const days = [...active].sort();
     if (!days.length) {
       g.streak = 0;
       g.lastActiveDate = null;
@@ -204,7 +208,7 @@
       const def = missionDef(m.id);
       if (!def || def.metric !== metric) return;
       const before = m.progress;
-      m.progress = U.clamp(m.progress + delta, 0, def.target);
+      m.progress = Math.max(0, m.progress + delta);
       if (before < def.target && m.progress >= def.target && enabled('missions') && !m.claimed) {
         Bus.emit('toast', { text: `Missão completa: ${def.text}! Resgate sua recompensa.`, type: 'achievement', icon: '🎯' });
       }
@@ -357,6 +361,8 @@
       if (task.priority === 'high') bumpMission('high');
       if (onTime) bumpMission('ontime');
       if (now.getHours() < 12) bumpMission('morning');
+      task.wasOnTime = !!onTime;
+      task.wasMorning = now.getHours() < 12;
       return { xp, coins };
     },
 
@@ -365,14 +371,17 @@
       const g = s.game;
       const day = task.completedAt ? U.dateKey(new Date(task.completedAt)) : U.today();
       g.xp = Math.max(0, g.xp - (task.xpAwarded || 0));
-      g.coins = Math.max(0, g.coins - (task.coinsAwarded || 0));
+      g.coins -= task.coinsAwarded || 0;
       g.xpByDate[day] = Math.max(0, (g.xpByDate[day] || 0) - (task.xpAwarded || 0));
       g.totalCompleted = Math.max(0, g.totalCompleted - 1);
       g.completedByDate[day] = Math.max(0, (g.completedByDate[day] || 0) - 1);
       if (day === U.today()) {
         bumpMission('done', -1);
         if (task.priority === 'high') bumpMission('high', -1);
+        if (task.wasOnTime) bumpMission('ontime', -1);
+        if (task.wasMorning) bumpMission('morning', -1);
       }
+      task.wasOnTime = task.wasMorning = false;
       if (!g.completedByDate[day]) recomputeStreak(g);
     },
 
@@ -386,12 +395,19 @@
       bumpMission('create');
     },
 
+    /** Tarefa criada hoje e apagada não conta para "Planeje 3 novas tarefas". */
+    onTaskRemoved(task) {
+      if (task.createdAt && U.dateKey(new Date(task.createdAt)) === U.today() && !task.spawnedFrom) bumpMission('create', -1);
+    },
+
     onPomodoro(s, minutes) {
       const g = s.game;
       const today = U.today();
       g.totalPomodoros++;
       g.focusMinutes += minutes;
       g.pomodorosByDate[today] = (g.pomodorosByDate[today] || 0) + 1;
+      g.focusByDate = g.focusByDate || {};
+      g.focusByDate[today] = (g.focusByDate[today] || 0) + minutes;
       addXp(g, today, 15, 3);
       touchStreak(g, today);
       bumpMission('pomo');
@@ -418,7 +434,7 @@
       const list = kind === 'accent' ? g.unlocked.accents : g.unlocked.mascots;
       if (!item || list.includes(key)) return;
       if (g.coins < item.price) {
-        UI.toast(`Faltam ${item.price - g.coins} moedas para esse item.`, { type: 'error', icon: '🪙' });
+        UI.toast(`Faltam ${item.price - Math.max(0, g.coins)} moedas para esse item.`, { type: 'error', icon: '🪙' });
         return;
       }
       Store.update((s) => {
@@ -475,7 +491,7 @@
           </div>
           <div class="card stat-mini"><span class="stat-emoji flame ${streak ? 'on' : ''}">🔥</span><div><strong>${streak}</strong><span>dias de sequência</span></div></div>
           <div class="card stat-mini"><span class="stat-emoji">🏅</span><div><strong>${g.bestStreak}</strong><span>melhor sequência</span></div></div>
-          <div class="card stat-mini"><span class="stat-emoji">🪙</span><div><strong>${g.coins}</strong><span>moedas</span></div></div>
+          <div class="card stat-mini"><span class="stat-emoji">🪙</span><div><strong>${Math.max(0, g.coins)}</strong><span>moedas</span></div></div>
           <div class="card stat-mini"><span class="stat-emoji">✅</span><div><strong>${g.totalCompleted}</strong><span>tarefas concluídas</span></div></div>
           <div class="card stat-mini"><span class="stat-emoji">🍅</span><div><strong>${g.totalPomodoros}</strong><span>pomodoros · ${U.formatDuration(g.focusMinutes) || '0 min'}</span></div></div>
         </div>
@@ -512,7 +528,7 @@
         </div>` : ''}
 
         <div class="card">
-          <div class="card-head"><h3>🛍️ Loja de recompensas</h3><span class="pill">🪙 ${g.coins}</span></div>
+          <div class="card-head"><h3>🛍️ Loja de recompensas</h3><span class="pill">🪙 ${Math.max(0, g.coins)}</span></div>
           <p class="muted small">Ganhe moedas concluindo tarefas, Pomodoros, missões e conquistas. Troque por temas e mascotes!</p>
           <h4 class="shop-title">Cores do tema</h4>
           <div class="shop">
@@ -554,8 +570,8 @@
               <span class="mission-emoji">${d.emoji}</span>
               <div class="mission-body">
                 <span>${d.text}</span>
-                <div class="progress sm"><span style="width:${(m.progress / d.target) * 100}%"></span></div>
-                <span class="muted small">${m.progress}/${d.target} · ${d.reward.xp} XP + ${d.reward.coins} 🪙</span>
+                <div class="progress sm"><span style="width:${Math.min(100, (m.progress / d.target) * 100)}%"></span></div>
+                <span class="muted small">${Math.min(m.progress, d.target)}/${d.target} · ${d.reward.xp} XP + ${d.reward.coins} 🪙</span>
               </div>
               ${m.claimed ? '<span class="pill pill-success">✓</span>' : `<button class="btn btn-sm ${done ? 'btn-primary pulse' : ''}" data-action="claim-mission" data-id="${m.id}" ${done ? '' : 'disabled'}>Resgatar</button>`}
             </li>`;
