@@ -311,6 +311,13 @@
     });
   }
 
+  // fecha seletores de emoji abertos ao clicar fora deles
+  document.addEventListener('mousedown', (e) => {
+    document.querySelectorAll('.emoji-picker .emoji-grid:not([hidden])').forEach((g) => {
+      if (!g.parentElement.contains(e.target)) g.hidden = true;
+    });
+  });
+
   function colorPicker(current, name = 'color') {
     return `
       <div class="color-picker">

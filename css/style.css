@@ -634,6 +634,14 @@ hr {
   color: var(--danger);
   border-color: transparent;
 }
+.pill-warn {
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+  border-color: transparent;
+}
+[data-theme='dark'] .pill-warn {
+  color: #fbbf24;
+}
 .pill-live {
   background: var(--accent);
   color: #fff;
@@ -1382,6 +1390,10 @@ select.input {
 .task-group {
   display: grid;
   gap: 10px;
+}
+.group-title .link-btn {
+  margin-left: auto;
+  font-size: 0.78rem;
 }
 .group-title {
   font-size: 0.9rem;
@@ -3037,4 +3049,19 @@ select.input {
 .tl-time .time-input {
   width: auto;
   min-width: 88px;
+}
+
+.shortcuts {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.shortcuts td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.shortcuts td:first-child {
+  white-space: nowrap;
+  width: 1%;
 }

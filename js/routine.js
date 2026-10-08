@@ -49,6 +49,7 @@
         if (prevEnd !== null && start - prevEnd >= 60) {
           rows += `<button class="tl-gap" data-action="new-task" data-date="${date}" data-time="${U.minutesToTime(prevEnd)}">☕ ${U.formatDuration(start - prevEnd)} livres — adicionar algo?</button>`;
         }
+        const conflict = !t.done && prevEnd !== null && start < prevEnd;
         prevEnd = Math.max(prevEnd || 0, end);
 
         const cat = Store.category(t.categoryId);
@@ -63,7 +64,7 @@
             <div class="tl-dot"><span>${t.emoji || cat.emoji}</span></div>
             <div class="tl-card">
               <div class="tl-main" data-action="edit-task" data-id="${t.id}" role="button" tabindex="0">
-                <div class="tl-title">${U.escape(t.title)} ${current ? '<span class="pill pill-live">● Agora</span>' : ''}${past ? '<span class="pill pill-danger">Atrasada</span>' : ''}</div>
+                <div class="tl-title">${U.escape(t.title)} ${current ? '<span class="pill pill-live">● Agora</span>' : ''}${past ? '<span class="pill pill-danger">Atrasada</span>' : ''}${conflict ? '<span class="pill pill-warn" title="Começa antes de a atividade anterior terminar">⚠️ Conflito</span>' : ''}</div>
                 <div class="tl-meta">
                   <span class="chip" style="--c:${cat.color}">${cat.emoji} ${U.escape(cat.name)}</span>
                   ${t.duration ? `<span class="meta">⏱️ ${U.formatDuration(+t.duration)}</span>` : ''}

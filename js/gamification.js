@@ -399,10 +399,12 @@
     },
 
     /** Feedback visual/sonoro após concluir (fora do Store.update). */
-    feedbackComplete({ xp, levelBefore, origin, allDone }) {
+    feedbackComplete({ xp, levelBefore, origin, allDone, undo }) {
       Sound.play('complete');
+      const action = undo ? { label: 'Desfazer', fn: undo } : null;
+      if (enabled() && enabled('showXP')) UI.toast(`${U.pick(CELEBRATE)} +${xp} XP`, { type: 'xp', icon: '⭐', duration: 4000, action });
+      else UI.toast('Tarefa concluída', { type: 'success', duration: 4000, action });
       if (enabled()) {
-        if (enabled('showXP')) UI.toast(`${U.pick(CELEBRATE)} +${xp} XP`, { type: 'xp', icon: '⭐', duration: 2200 });
         celebrate({ origin, big: allDone });
         if (allDone && enabled('motivation')) setTimeout(() => UI.toast(U.pick(ALL_DONE), { type: 'success', icon: '🏆' }), 600);
       }

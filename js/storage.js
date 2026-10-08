@@ -55,6 +55,7 @@
       autoStartFocus: false,
     },
     lastBackup: null,
+    lastBackupNag: null,
   };
 
   function defaultState() {
@@ -134,6 +135,7 @@
         xpAwarded: 0,
         coinsAwarded: 0,
         spawnedNext: null,
+        snoozeUntil: null,
       },
       t
     );

@@ -172,6 +172,7 @@
                 xpAwarded: 0,
                 coinsAwarded: 0,
                 spawnedNext: null,
+                snoozeUntil: null,
                 subtasks: task.subtasks.map((st) => ({ ...st, id: U.uid(), done: false })),
               });
               s.tasks.push(next);
@@ -181,7 +182,7 @@
           const today = s.tasks.filter((x) => x.date === U.today());
           allDone = task.date === U.today() && today.length >= 3 && today.every((x) => x.done);
         });
-        Game.feedbackComplete({ xp: reward.xp, levelBefore, origin, allDone });
+        Game.feedbackComplete({ xp: reward.xp, levelBefore, origin, allDone, undo: () => Tasks.get(id)?.done && Tasks.toggle(id) });
       } else {
         Store.update((s) => {
           const task = s.tasks.find((x) => x.id === id);
@@ -225,7 +226,7 @@
     duplicate(id) {
       const t = Tasks.get(id);
       if (!t) return;
-      Tasks.create({ ...t, title: t.title + ' (cópia)', done: false, completedAt: null, pomodoros: 0, xpAwarded: 0, coinsAwarded: 0, spawnedNext: null, subtasks: t.subtasks.map((s) => ({ ...s, id: U.uid(), done: false })) });
+      Tasks.create({ ...t, title: t.title + ' (cópia)', snoozeUntil: null, done: false, completedAt: null, pomodoros: 0, xpAwarded: 0, coinsAwarded: 0, spawnedNext: null, subtasks: t.subtasks.map((s) => ({ ...s, id: U.uid(), done: false })) });
       UI.toast('Tarefa duplicada', { icon: '📄' });
     },
 
@@ -654,7 +655,8 @@
           const items = list.filter((t) => !used.has(t.id) && fn(t));
           items.forEach((t) => used.add(t.id));
           if (items.length) {
-            groupsHtml += `<section class="task-group"><h4 class="group-title">${label} <span class="count">${items.length}</span></h4>
+            const extra = label.includes('Atrasadas') && items.length > 1 ? '<button class="link-btn" data-action="reschedule-overdue">➡️ mover todas para hoje</button>' : '';
+            groupsHtml += `<section class="task-group"><h4 class="group-title">${label} <span class="count">${items.length}</span>${extra}</h4>
               <div class="task-list">${items.map((t) => Tasks.itemHtml(t, { showDate: !label.includes('Hoje') })).join('')}</div></section>`;
           }
         });
@@ -775,6 +777,20 @@
   Actions['clear-filters'] = () => {
     Object.assign(Tasks.filters, { category: 'all', priority: 'all', q: '' });
     Bus.emit('rerender');
+  };
+  Actions['reschedule-overdue'] = async () => {
+    const today = U.today();
+    const list = Store.state.tasks.filter((t) => isOverdue(t) && t.date < today);
+    const late = Store.state.tasks.filter((t) => isOverdue(t)).length;
+    if (!list.length) {
+      UI.toast(late ? 'As atrasadas já são de hoje — ajuste o horário delas na rotina.' : 'Nada atrasado! 🎉', { icon: '👌' });
+      return;
+    }
+    const ok = await UI.confirm({ title: `Mover ${list.length} tarefa${list.length > 1 ? 's' : ''} para hoje?`, text: 'Os horários são mantidos.', okText: 'Mover', icon: '➡️' });
+    if (!ok) return;
+    const ids = new Set(list.map((t) => t.id));
+    Store.update((s) => s.tasks.forEach((t) => ids.has(t.id) && (t.date = today)));
+    UI.toast('Tarefas reagendadas para hoje', { type: 'success', icon: '📅' });
   };
   Actions['clear-done'] = async () => {
     const n = Store.state.tasks.filter((t) => t.done).length;

@@ -237,7 +237,7 @@
       Store.update((s) => {
         samples.forEach((x) => {
           const { dateOffset, ...rest } = x;
-          s.tasks.push(Store.normalizeTask({ id: U.uid(), ...rest, date: U.addDays(today, dateOffset || 0), reminder: x.time ? rem : null, createdAt: new Date(Date.now() - 86400000).toISOString() }));
+          s.tasks.push(Store.normalizeTask({ id: U.uid(), ...rest, date: U.addDays(today, dateOffset || 0), reminder: x.time ? rem : null, createdAt: new Date().toISOString() }));
         });
       });
     },
@@ -292,8 +292,45 @@
       if (p.running && p.endAt && p.endAt <= Date.now()) Pomodoro.finish(true);
 
       setTimeout(() => App.onboarding(), 400);
+      App.protectData();
       if (!Store.storageOk) UI.toast('Modo de visualização: o armazenamento está bloqueado aqui, então os dados não serão salvos. Baixe o arquivo e abra no navegador para salvar.', { type: 'error', duration: 10000 });
       App.registerSW();
+    },
+
+    /** Pede armazenamento persistente e lembra de fazer backup periodicamente. */
+    protectData() {
+      try {
+        if (navigator.storage && navigator.storage.persist) {
+          navigator.storage.persisted().then((p) => p || navigator.storage.persist()).catch(() => {});
+        }
+      } catch (_) {}
+      const st = Store.state.settings;
+      if (!Store.storageOk || !st.onboarded || Store.state.tasks.length < 5) return;
+      const week = 7 * 86400000;
+      const last = st.lastBackup ? new Date(st.lastBackup).getTime() : new Date(Store.state.createdAt).getTime();
+      const nag = st.lastBackupNag ? new Date(st.lastBackupNag).getTime() : 0;
+      if (Date.now() - last > week && Date.now() - nag > week) {
+        Store.update((s) => (s.settings.lastBackupNag = new Date().toISOString()), { silent: true });
+        setTimeout(() => UI.toast(st.lastBackup ? 'Faz mais de uma semana desde o último backup.' : 'Que tal fazer um backup dos seus dados?', { icon: '💾', duration: 12000, action: { label: 'Fazer backup', fn: () => Backup.exportJSON() } }), 3000);
+      }
+    },
+
+    showShortcuts() {
+      const rows = [
+        ['N', 'Nova tarefa'],
+        ['/', 'Buscar tarefas'],
+        ['1 – 8', 'Ir para Início, Rotina, Tarefas, Calendário, Pomodoro, Categorias, Conquistas, Configurações'],
+        ['P', 'Iniciar / pausar o Pomodoro'],
+        ['T', 'Alternar tema claro / escuro'],
+        ['?', 'Mostrar esta ajuda'],
+        ['Esc', 'Fechar janelas'],
+        ['Enter', 'Salvar formulários / adicionar rapidamente'],
+      ];
+      UI.modal({
+        title: '⌨️ Atalhos de teclado',
+        size: 'sm',
+        body: `<table class="shortcuts">${rows.map(([k, d]) => `<tr><td><kbd>${k}</kbd></td><td>${d}</td></tr>`).join('')}</table>`,
+      });
     },
 
     minuteTick() {
@@ -374,6 +411,11 @@
           setTimeout(() => document.querySelector('[data-filter="q"]')?.focus(), 60);
         } else if (k === 'p') {
           Pomodoro.toggle();
+        } else if (e.key === '?') {
+          e.preventDefault();
+          App.showShortcuts();
+        } else if (k === 't') {
+          Actions['theme-toggle']();
         } else if (/^[1-8]$/.test(k)) {
           App.go(NAV_ORDER[+k - 1]);
         }
@@ -426,6 +468,7 @@
     Object.assign(Tasks.filters, { status: el.dataset.status, priority: el.dataset.priority || 'all', category: 'all', q: '' });
     App.go('tasks');
   };
+  Actions['shortcuts'] = () => App.showShortcuts();
   Actions['equip'] = (el) => Game.equip(el.dataset.kind, el.dataset.key);
   Actions['buy'] = (el) => Game.buy(el.dataset.kind, el.dataset.key);
   Actions['claim-mission'] = (el) => Game.claimMission(el.dataset.id);

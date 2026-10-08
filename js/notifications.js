@@ -12,6 +12,7 @@
   const { U, Store, UI, Sound } = window.TU;
 
   const supported = 'Notification' in window;
+  const LATE = 15 * 60000; // lembretes perdidos há mais de 15 min não são disparados
   const triggersSupported = supported && 'showTrigger' in Notification.prototype && 'TimestampTrigger' in window;
 
   async function swReg() {
@@ -50,12 +51,12 @@
     },
 
     /** Exibe uma notificação do sistema (se permitido) e/ou um toast. */
-    async show(title, body = '', { tag, toast = true, onlyHidden = false, sound = null, data = {} } = {}) {
+    async show(title, body = '', { tag, toast = true, onlyHidden = false, sound = null, data = {}, action = null } = {}) {
       const s = Store.state.settings;
       if (sound) Sound.play(sound);
       if (toast) {
         const m = title.match(/^(\p{Extended_Pictographic}\uFE0F?)\s*/u);
-        UI.toast(`${m ? title.slice(m[0].length) : title}${body ? ' — ' + body : ''}`, { icon: m ? m[1] : '🔔', duration: 7000 });
+        UI.toast(`${m ? title.slice(m[0].length) : title}${body ? ' — ' + body : ''}`, { icon: m ? m[1] : '🔔', duration: action ? 12000 : 7000, action });
       }
       if (!s.notifications || !supported || Notification.permission !== 'granted') return;
       if (onlyHidden && document.visibilityState === 'visible') return;
@@ -97,6 +98,15 @@
       if (p.running && p.endAt) Notify.scheduleAt(p.endAt, '🍅 Tempo esgotado!', 'Sua sessão terminou.', 'pomodoro');
     },
 
+    /** Adia o lembrete de uma tarefa por alguns minutos. */
+    snooze(id, minutes = 10) {
+      Store.update((s) => {
+        const t = s.tasks.find((x) => x.id === id);
+        if (t) t.snoozeUntil = Date.now() + minutes * 60000;
+      }, { silent: true });
+      UI.toast(`Ok! Lembro de novo em ${minutes} min.`, { icon: '😴', duration: 2500 });
+    },
+
     /** Verifica lembretes pendentes. Executado periodicamente. */
     check() {
       const s = Store.state;
@@ -110,22 +120,31 @@
         const due = U.dueDate(t).getTime();
         const base = `${t.id}|${t.date}|${t.time}`;
         const created = new Date(t.createdAt).getTime();
+        const snooze = { label: 'Adiar 10 min', fn: () => Notify.snooze(t.id, 10) };
+        // lembrete adiado ("soneca")
+        if (t.snoozeUntil && now >= t.snoozeUntil) {
+          Store.update((st) => {
+            const x = st.tasks.find((y) => y.id === t.id);
+            if (x) x.snoozeUntil = null;
+          }, { silent: true });
+          Notify.show(`🔔 ${t.emoji ? t.emoji + ' ' : ''}${t.title}`, `Lembrete adiado · ${t.time}`, { tag: base + 's', sound: 'reminder', data: { view: 'routine' }, action: snooze });
+        }
         if (t.reminder !== null && t.reminder !== undefined) {
           const fireAt = due - t.reminder * 60000;
           const key = base + '|r';
-          if (now >= fireAt && now - fireAt < 6 * 3600000 && created <= due - 60000 && !notified[key]) {
+          if (now >= fireAt && now <= due + LATE && created <= due - 60000 && !notified[key]) {
             notified[key] = now;
             changed = true;
             const mins = Math.round((due - now) / 60000);
             const when = mins > 1 ? `Começa às ${t.time} (em ${mins >= 60 ? U.formatDuration(mins) : mins + ' min'})` : `Está na hora! (${t.time})`;
-            Notify.show(`🔔 ${t.emoji ? t.emoji + ' ' : ''}${t.title}`, when, { tag: base, sound: 'reminder', data: { view: 'routine' } });
+            Notify.show(`🔔 ${t.emoji ? t.emoji + ' ' : ''}${t.title}`, when, { tag: base, sound: 'reminder', data: { view: 'routine' }, action: snooze });
           }
           // aviso no horário exato, se o lembrete foi antecipado
           const keyDue = base + '|d';
-          if (t.reminder > 0 && now >= due && now - due < 3600000 && created <= due && !notified[keyDue]) {
+          if (t.reminder > 0 && now >= due && now - due < LATE && created <= due && !notified[keyDue] && !t.snoozeUntil) {
             notified[keyDue] = now;
             changed = true;
-            Notify.show(`⏰ Agora: ${t.emoji ? t.emoji + ' ' : ''}${t.title}`, 'Bora fazer acontecer!', { tag: base + 'd', sound: 'reminder', data: { view: 'routine' } });
+            Notify.show(`⏰ Agora: ${t.emoji ? t.emoji + ' ' : ''}${t.title}`, 'Bora fazer acontecer!', { tag: base + 'd', sound: 'reminder', data: { view: 'routine' }, action: snooze });
           }
         }
       });
