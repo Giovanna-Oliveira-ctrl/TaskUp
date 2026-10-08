@@ -29,6 +29,10 @@
     theme: 'auto', // auto | light | dark
     accent: 'violeta',
     mascot: '🐣',
+    background: 'none',
+    effect: 'classic',
+    soundPack: 'classic',
+    title: 'none',
     // gamificação
     gamification: true,
     showXP: true,
@@ -82,7 +86,10 @@
         achievements: {},
         missions: { date: null, list: [] },
         weekly: { week: null, claimed: false },
-        unlocked: { accents: ['violeta'], mascots: ['🐣'] },
+        unlocked: { accents: ['violeta'], mascots: ['🐣'], backgrounds: ['none'], effects: ['classic'], sounds: ['classic'], titles: ['none'] },
+        inventory: { freeze: 0 },
+        boostUntil: 0,
+        frozenDays: {},
       },
       pomodoro: {
         mode: 'focus', // focus | short | long
@@ -260,9 +267,6 @@
       }
       // configurações e jogo
       const st = s.settings;
-      const G = window.TU.Game;
-      if (G && !G.MASCOTS[st.mascot]) st.mascot = '🐣';
-      if (G && !G.ACCENTS[st.accent]) st.accent = 'violeta';
       if (!['auto', 'light', 'dark'].includes(st.theme)) st.theme = 'auto';
       st.name = str(st.name, 40);
       if (!RE_TIME.test(st.dailySummaryTime)) st.dailySummaryTime = '08:00';
@@ -271,12 +275,7 @@
       const g = s.game;
       ['xp', 'streak', 'bestStreak', 'totalCompleted', 'totalPomodoros', 'focusMinutes'].forEach((k) => (g[k] = num(g[k], 0, 0, 1e9)));
       g.coins = num(g.coins, 0, -1e6, 1e9);
-      if (G) {
-        g.unlocked.accents = (Array.isArray(g.unlocked.accents) ? g.unlocked.accents : []).filter((k) => G.ACCENTS[k]);
-        g.unlocked.mascots = (Array.isArray(g.unlocked.mascots) ? g.unlocked.mascots : []).filter((k) => G.MASCOTS[k]);
-      }
-      if (!g.unlocked.accents.includes('violeta')) g.unlocked.accents.unshift('violeta');
-      if (!g.unlocked.mascots.includes('🐣')) g.unlocked.mascots.unshift('🐣');
+      if (window.TU.Shop) window.TU.Shop.validate(s);
       if (g.lastActiveDate && !RE_DATE.test(g.lastActiveDate)) g.lastActiveDate = null;
       ['xpByDate', 'completedByDate', 'pomodorosByDate', 'focusByDate', 'achievements', 'notified'].forEach((k) => {
         const o = k === 'notified' ? s : g;

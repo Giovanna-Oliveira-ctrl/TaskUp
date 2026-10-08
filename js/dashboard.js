@@ -59,7 +59,7 @@
       view.innerHTML = `
         <section class="hero card">
           <div class="hero-text">
-            <p class="kicker">${U.formatDateLong(today)}</p>
+            <p class="kicker">${U.formatDateLong(today)}${gameOn && window.TU.Shop.titleText() ? ` · <span class="user-title">${U.escape(window.TU.Shop.titleText())}</span>` : ''}${gameOn && window.TU.Shop.boostActive() ? ' · <span class="pill pill-live">⚡ XP em dobro</span>' : ''}</p>
             <h1>${g.text}${name}! <span class="wave">${g.emoji}</span></h1>
             <p class="hero-sub">${gameOn && st.motivation ? Dashboard._motivation : 'Vamos fazer acontecer hoje?'}</p>
             <div class="row gap wrap mt">

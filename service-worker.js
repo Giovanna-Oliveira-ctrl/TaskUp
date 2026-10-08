@@ -3,7 +3,7 @@
    Cache "offline-first" de todos os arquivos do app.
    Altere CACHE_VERSION ao publicar mudanças.
    ========================================================= */
-const CACHE_VERSION = 'taskup-v1';
+const CACHE_VERSION = 'taskup-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -12,6 +12,7 @@ const ASSETS = [
   './js/utils.js',
   './js/storage.js',
   './js/ui.js',
+  './js/shop.js',
   './js/gamification.js',
   './js/tasks.js',
   './js/routine.js',

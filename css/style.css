@@ -3102,3 +3102,182 @@ select.input {
   background: var(--success);
   border-color: var(--success);
 }
+
+/* ---------- Loja: abas, prévias e poderes ---------- */
+.shop-tabs {
+  margin: 4px 0 16px;
+}
+.shop-item {
+  position: relative;
+  transition: transform 0.2s var(--bounce), box-shadow 0.2s;
+}
+.shop-item:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+}
+.shop-item.locked .swatch,
+.shop-item.locked .bg-preview,
+.shop-item.locked .mascot-big,
+.shop-item.locked .effect-preview,
+.shop-item.locked .title-preview {
+  filter: saturate(0.55);
+  opacity: 0.8;
+}
+.shop-item strong {
+  font-size: 0.84rem;
+  line-height: 1.25;
+}
+.shop-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.bg-preview {
+  width: 64px;
+  height: 48px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background-color: var(--bg);
+}
+.effect-preview {
+  font-size: 1.5rem;
+  line-height: 48px;
+  letter-spacing: 2px;
+}
+.title-preview {
+  min-height: 48px;
+  display: grid;
+  place-items: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 4px 10px;
+  margin: auto 0;
+  min-height: 0;
+  height: 48px;
+}
+.title-preview.big {
+  font-size: 1rem;
+  height: auto;
+  padding: 10px 16px;
+  background: #fff;
+}
+.levelup-badge.mystery .swatch,
+.levelup-badge.mystery .bg-preview {
+  width: 60px;
+  height: 60px;
+  border: 3px solid #fff;
+}
+.levelup-badge.mystery .mascot-big,
+.levelup-badge.mystery .effect-preview {
+  font-size: 2.6rem;
+  line-height: 1;
+}
+.shop.powerups {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+.shop-item.powerup p {
+  margin: 0;
+  flex: 1;
+}
+.user-title {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 1px 8px;
+  margin-top: 3px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.xp-chip.boost {
+  border-color: #facc15;
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.25);
+}
+.xp-chip.boost .xc-level::after {
+  content: '⚡';
+  position: absolute;
+  font-size: 0.7rem;
+  transform: translate(12px, -12px);
+}
+.xc-level {
+  position: relative;
+}
+
+/* Tema arco-íris */
+.swatch.rainbow,
+.rainbow .brand-logo,
+.rainbow .btn-primary,
+.rainbow .fab,
+.rainbow .progress > span:not([style*='background']),
+.rainbow .filter-chip.active {
+  background: linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #0ea5e9, #8b5cf6) !important;
+}
+
+/* ---------- Fundos da loja ---------- */
+body[data-bg='dots'],
+.bg-preview[data-bg='dots'] {
+  background-image: radial-gradient(var(--accent-soft) 2px, transparent 2.5px);
+  background-size: 22px 22px;
+}
+body[data-bg='grid'],
+.bg-preview[data-bg='grid'] {
+  background-image: linear-gradient(var(--accent-soft) 1px, transparent 1px), linear-gradient(90deg, var(--accent-soft) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+body[data-bg='lines'],
+.bg-preview[data-bg='lines'] {
+  background-image: linear-gradient(transparent 27px, var(--accent-soft) 28px);
+  background-size: 100% 28px;
+}
+body[data-bg='stripes'],
+.bg-preview[data-bg='stripes'] {
+  background-image: repeating-linear-gradient(45deg, var(--accent-soft) 0 12px, transparent 12px 28px);
+}
+body[data-bg='aurora'],
+.bg-preview[data-bg='aurora'] {
+  background-image: radial-gradient(60% 50% at 10% 10%, rgba(34, 211, 238, 0.22), transparent 70%), radial-gradient(50% 50% at 90% 20%, rgba(168, 85, 247, 0.22), transparent 70%),
+    radial-gradient(60% 60% at 50% 100%, rgba(16, 185, 129, 0.2), transparent 70%);
+}
+body[data-bg='party'],
+.bg-preview[data-bg='party'] {
+  background-image: radial-gradient(circle at 20% 30%, rgba(244, 114, 182, 0.35) 3px, transparent 4px), radial-gradient(circle at 70% 60%, rgba(250, 204, 21, 0.4) 3px, transparent 4px),
+    radial-gradient(circle at 40% 80%, rgba(34, 211, 238, 0.35) 3px, transparent 4px), radial-gradient(circle at 85% 15%, rgba(124, 92, 255, 0.35) 3px, transparent 4px);
+  background-size: 90px 90px;
+}
+body[data-bg='stars'],
+.bg-preview[data-bg='stars'] {
+  background-color: #0f1030;
+  background-image: radial-gradient(1.5px 1.5px at 20px 30px, #fff, transparent), radial-gradient(1px 1px at 80px 70px, #fff, transparent), radial-gradient(2px 2px at 140px 20px, #facc15, transparent),
+    radial-gradient(1px 1px at 170px 120px, #fff, transparent), radial-gradient(1.5px 1.5px at 60px 150px, #c4b5fd, transparent), linear-gradient(180deg, #0f1030, #1e1b4b);
+  background-size: 200px 180px, 200px 180px, 200px 180px, 200px 180px, 200px 180px, 100% 100%;
+}
+body[data-bg='stars'] .topbar {
+  background: rgba(15, 16, 48, 0.7);
+  color: #f1f0fa;
+}
+body[data-bg='stars'] .page-title,
+body[data-bg='stars'] .view > .row .muted {
+  color: #f1f0fa;
+}
+body[data-bg]:not([data-bg='none']) {
+  background-attachment: fixed;
+}
+
+.shop-teaser {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: linear-gradient(135deg, var(--accent-soft), transparent 70%), var(--surface);
+}
+.shop-teaser p {
+  margin-top: 4px;
+}

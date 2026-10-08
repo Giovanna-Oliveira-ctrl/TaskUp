@@ -135,7 +135,22 @@
   let confettiParts = [];
   let confettiRAF = null;
 
-  function confetti({ count = 120, origin = null } = {}) {
+  /** Símbolos de cada efeito de comemoração (loja). "classic" = papel picado. */
+  const EFFECTS = {
+    classic: null,
+    hearts: ['❤️', '💖', '💕', '💗', '💜'],
+    stars: ['⭐', '✨', '🌟', '💫'],
+    fruits: ['🍓', '🍉', '🍍', '🍒', '🍋', '🥝'],
+    snow: ['❄️', '❄️', '☃️', '🌨️'],
+    party: ['🎉', '🎊', '🥳', '🎈', '🪅'],
+    space: ['🚀', '🪐', '⭐', '👽', '🌙'],
+    money: ['💸', '💰', '🪙', '💵'],
+  };
+
+  function confetti({ count = 120, origin = null, effect = null } = {}) {
+    const st = window.TU.Store && window.TU.Store.state;
+    const symbols = EFFECTS[effect || (st && st.settings.effect)] || null;
+    if (symbols) count = Math.round(count * 0.6); // emojis são maiores
     const canvas = document.getElementById('confetti');
     if (!canvas) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) count = Math.min(count, 25);
@@ -160,7 +175,8 @@
         rot: Math.random() * 360,
         vr: (Math.random() - 0.5) * 20,
         life: 0,
-        shape: Math.random() > 0.5 ? 'rect' : 'circle',
+        shape: symbols ? 'emoji' : Math.random() > 0.5 ? 'rect' : 'circle',
+        emoji: symbols ? U.pick(symbols) : null,
       });
     }
     canvas.style.display = 'block';
@@ -180,7 +196,12 @@
         ctx.rotate((p.rot * Math.PI) / 180);
         ctx.globalAlpha = Math.max(0, 1 - p.life / 160);
         ctx.fillStyle = p.color;
-        if (p.shape === 'rect') ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
+        if (p.shape === 'emoji') {
+          ctx.font = `${Math.round(p.size * 2.4)}px system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(p.emoji, 0, 0);
+        } else if (p.shape === 'rect') ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
         else {
           ctx.beginPath();
           ctx.arc(0, 0, p.size / 3, 0, Math.PI * 2);
@@ -259,15 +280,56 @@
     ],
   };
 
+  /** Pacotes de som de conclusão (loja): [frequência, início, duração, onda] */
+  const PACKS = {
+    classic: SOUNDS.complete,
+    pop: [
+      [880, 0, 0.05, 'sine'],
+      [1320, 0.05, 0.08, 'sine'],
+    ],
+    bell: [
+      [1046.5, 0, 0.5, 'sine'],
+      [1568, 0, 0.35, 'sine'],
+      [2093, 0.02, 0.25, 'sine'],
+    ],
+    retro: [
+      [523.25, 0, 0.07, 'square'],
+      [659.25, 0.07, 0.07, 'square'],
+      [783.99, 0.14, 0.07, 'square'],
+      [1046.5, 0.21, 0.15, 'square'],
+    ],
+    xylo: [
+      [783.99, 0, 0.18, 'triangle'],
+      [987.77, 0.09, 0.18, 'triangle'],
+      [1174.66, 0.18, 0.3, 'triangle'],
+    ],
+    harp: [
+      [523.25, 0, 0.4, 'sine'],
+      [659.25, 0.06, 0.4, 'sine'],
+      [783.99, 0.12, 0.4, 'sine'],
+      [1046.5, 0.18, 0.4, 'sine'],
+      [1318.5, 0.24, 0.5, 'sine'],
+    ],
+    fanfare: [
+      [392, 0, 0.12, 'sawtooth'],
+      [392, 0.13, 0.12, 'sawtooth'],
+      [392, 0.26, 0.12, 'sawtooth'],
+      [523.25, 0.4, 0.45, 'sawtooth'],
+    ],
+  };
+
   const Sound = {
-    play(name, force = false) {
+    PACKS,
+    play(name, force = false, pack = null) {
       const s = window.TU.Store && window.TU.Store.state;
       if (!force && s && !s.settings.sounds) return;
       const ac = ctx();
       if (!ac) return;
       const vol = (s ? s.settings.volume : 0.6) * 0.35;
-      const seq = SOUNDS[name] || SOUNDS.click;
-      const v = name === 'levelup' || name === 'coin' ? vol * 0.5 : vol;
+      let seq = SOUNDS[name] || SOUNDS.click;
+      if (name === 'complete') seq = PACKS[pack || (s && s.settings.soundPack)] || SOUNDS.complete;
+      const loud = ['levelup', 'coin'].includes(name) || (name === 'complete' && ['retro', 'fanfare'].includes(pack || (s && s.settings.soundPack)));
+      const v = loud ? vol * 0.5 : vol;
       seq.forEach(([f, st, d, type]) => tone(ac, f, st, d, { type, vol: Math.max(0.0002, v) }));
     },
   };
@@ -334,6 +396,6 @@
       </div>`;
   }
 
-  window.TU.UI = { toast, modal, confirm, confetti, formData, emojiPicker, bindEmojiPicker, colorPicker };
+  window.TU.UI = { EFFECTS, toast, modal, confirm, confetti, formData, emojiPicker, bindEmojiPicker, colorPicker };
   window.TU.Sound = Sound;
 })();

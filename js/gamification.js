@@ -81,7 +81,9 @@
     { id: 'night', emoji: '🦉', name: 'Coruja', desc: 'Conclua uma tarefa depois das 23h', test: (g, ctx) => ctx && ctx.hour >= 23 },
     { id: 'high', emoji: '🐸', name: 'Engolindo sapos', desc: 'Conclua 10 tarefas de alta prioridade', test: () => Store.state.tasks.filter((t) => t.done && t.priority === 'high').length >= 10 },
     { id: 'organizer', emoji: '🗂️', name: 'Organizador', desc: 'Crie uma categoria personalizada', test: () => Store.state.categories.some((c) => !c.id.startsWith('cat-')) },
-    { id: 'shopper', emoji: '🛍️', name: 'Colecionador', desc: 'Compre um item na loja', test: (g) => g.unlocked.accents.length + g.unlocked.mascots.length > 2 },
+    { id: 'shopper', emoji: '🛍️', name: 'Primeira compra', desc: 'Consiga um item da loja', test: () => Shop.collectionSize() >= 1 },
+    { id: 'collector', emoji: '💎', name: 'Colecionador', desc: 'Tenha 10 itens da loja', test: () => Shop.collectionSize() >= 10 },
+    { id: 'collector30', emoji: '👑', name: 'Museu particular', desc: 'Tenha 30 itens da loja', test: () => Shop.collectionSize() >= 30 },
     { id: 'allday', emoji: '🏆', name: 'Dia zerado', desc: 'Conclua todas as tarefas de um dia (mín. 3)', test: (g, ctx) => ctx && ctx.allDone },
   ];
 
@@ -101,28 +103,9 @@
   const WEEKLY_TARGET = 20;
   const WEEKLY_REWARD = { xp: 150, coins: 50 };
 
-  /* ---------- Loja ---------- */
-  const ACCENTS = {
-    violeta: { name: 'Violeta', color: '#7c5cff', color2: '#b05cff', price: 0 },
-    oceano: { name: 'Oceano', color: '#0ea5e9', color2: '#22d3ee', price: 40 },
-    floresta: { name: 'Floresta', color: '#10b981', color2: '#84cc16', price: 40 },
-    sunset: { name: 'Pôr do sol', color: '#f97316', color2: '#ec4899', price: 60 },
-    chiclete: { name: 'Chiclete', color: '#ec4899', color2: '#a855f7', price: 60 },
-    galaxia: { name: 'Galáxia', color: '#6366f1', color2: '#0ea5e9', price: 90 },
-    ouro: { name: 'Ouro', color: '#d97706', color2: '#facc15', price: 150 },
-  };
-  const MASCOTS = {
-    '🐣': { name: 'Pintinho', price: 0 },
-    '🐱': { name: 'Gato', price: 30 },
-    '🐶': { name: 'Cachorro', price: 30 },
-    '🦊': { name: 'Raposa', price: 50 },
-    '🐼': { name: 'Panda', price: 50 },
-    '🐸': { name: 'Sapo', price: 60 },
-    '🦉': { name: 'Coruja', price: 80 },
-    '🦄': { name: 'Unicórnio', price: 120 },
-    '🐉': { name: 'Dragão', price: 200 },
-    '🤖': { name: 'Robô', price: 200 },
-  };
+  /* ---------- Loja (catálogo em shop.js) ---------- */
+  const { ACCENTS, MASCOTS } = window.TU.Shop;
+  const Shop = window.TU.Shop;
 
   /* ---------- Helpers ---------- */
   const enabled = (k) => {
@@ -130,6 +113,11 @@
     return s.gamification && (k ? s[k] !== false : true);
   };
   const game = () => Store.state.game;
+
+  /** XP em dobro (poder da loja) */
+  function boosted(xp) {
+    return Shop.boostActive() ? xp * 2 : xp;
+  }
 
   function addXp(g, date, xp, coins) {
     g.xp = Math.max(0, g.xp + xp);
@@ -161,7 +149,12 @@
       ...Object.keys(g.completedByDate).filter((d) => g.completedByDate[d] > 0),
       ...Object.keys(g.pomodorosByDate || {}).filter((d) => g.pomodorosByDate[d] > 0),
     ]);
+    const frozen = g.frozenDays || {};
+    Object.keys(frozen).forEach((d) => active.add(d));
     const days = [...active].sort();
+    const lastAny = days[days.length - 1];
+    // remove dias congelados no fim (não contam como atividade)
+    while (days.length && frozen[days[days.length - 1]]) days.pop();
     if (!days.length) {
       g.streak = 0;
       g.lastActiveDate = null;
@@ -170,11 +163,12 @@
     const last = days[days.length - 1];
     let streak = 1;
     for (let i = days.length - 1; i > 0; i--) {
-      if (U.diffDays(days[i - 1], days[i]) === 1) streak++;
-      else break;
+      if (U.diffDays(days[i - 1], days[i]) !== 1) break;
+      if (!frozen[days[i - 1]]) streak++; // dia congelado mantém a sequência, mas não soma
     }
     g.streak = streak;
-    g.lastActiveDate = last;
+    // um dia congelado logo depois do último dia ativo mantém a sequência viva
+    g.lastActiveDate = lastAny > last && U.diffDays(last, lastAny) === Object.keys(frozen).filter((d) => d > last && d <= lastAny).length ? lastAny : last;
   }
 
   /* ---------- Missões ---------- */
@@ -223,10 +217,10 @@
     const before = levelFromXp(g.xp);
     Store.update((s) => {
       m.claimed = true;
-      addXp(s.game, U.today(), def.reward.xp, def.reward.coins);
+      addXp(s.game, U.today(), boosted(def.reward.xp), def.reward.coins);
     });
     Sound.play('coin');
-    UI.toast(`+${def.reward.xp} XP e +${def.reward.coins} moedas!`, { type: 'xp', icon: '🪙' });
+    UI.toast(`+${boosted(def.reward.xp)} XP e +${def.reward.coins} moedas!`, { type: 'xp', icon: '🪙' });
     afterXp(before);
   }
 
@@ -244,7 +238,7 @@
     const before = levelFromXp(game().xp);
     Store.update((s) => {
       s.game.weekly.claimed = true;
-      addXp(s.game, U.today(), WEEKLY_REWARD.xp, WEEKLY_REWARD.coins);
+      addXp(s.game, U.today(), boosted(WEEKLY_REWARD.xp), WEEKLY_REWARD.coins);
     });
     Sound.play('coin');
     celebrate({ big: true });
@@ -354,6 +348,7 @@
       const streakDay = touchStreak(g, today);
       // bônus por sequência
       if (streakDay && g.streak > 1) xp += Math.min(g.streak, 10) * 2;
+      xp = boosted(xp);
       addXp(g, today, xp, coins);
       g.totalCompleted++;
       g.completedByDate[today] = (g.completedByDate[today] || 0) + 1;
@@ -408,10 +403,11 @@
       g.pomodorosByDate[today] = (g.pomodorosByDate[today] || 0) + 1;
       g.focusByDate = g.focusByDate || {};
       g.focusByDate[today] = (g.focusByDate[today] || 0) + minutes;
-      addXp(g, today, 15, 3);
+      const xp = boosted(15);
+      addXp(g, today, xp, 3);
       touchStreak(g, today);
       bumpMission('pomo');
-      return { xp: 15, coins: 3 };
+      return { xp, coins: 3 };
     },
 
     /** Feedback visual/sonoro após concluir (fora do Store.update). */
@@ -429,33 +425,29 @@
     },
 
     buy(kind, key) {
-      const g = game();
-      const item = kind === 'accent' ? ACCENTS[key] : MASCOTS[key];
-      const list = kind === 'accent' ? g.unlocked.accents : g.unlocked.mascots;
-      if (!item || list.includes(key)) return;
-      if (g.coins < item.price) {
-        UI.toast(`Faltam ${item.price - Math.max(0, g.coins)} moedas para esse item.`, { type: 'error', icon: '🪙' });
-        return;
-      }
-      Store.update((s) => {
-        s.game.coins -= item.price;
-        (kind === 'accent' ? s.game.unlocked.accents : s.game.unlocked.mascots).push(key);
-        if (kind === 'accent') s.settings.accent = key;
-        else s.settings.mascot = key;
-      });
-      Sound.play('coin');
-      celebrate({});
-      UI.toast(`${item.name} desbloqueado e equipado!`, { type: 'success', icon: kind === 'accent' ? '🎨' : key });
-      checkAchievements();
-      Bus.emit('theme');
+      Shop.buy(kind, key);
     },
 
     equip(kind, key) {
+      Shop.equip(kind, key);
+    },
+
+    /** Troca as missões ainda não resgatadas por outras (poder da loja). */
+    rerollMissions() {
+      ensureMissions();
       Store.update((s) => {
-        if (kind === 'accent') s.settings.accent = key;
-        else s.settings.mascot = key;
+        const list = s.game.missions.list;
+        const keep = list.filter((m) => m.claimed);
+        const used = new Set(list.map((m) => m.id));
+        const pool = MISSION_POOL.filter((m) => !used.has(m.id));
+        const fresh = [];
+        while (keep.length + fresh.length < 3 && pool.length) {
+          const i = Math.floor(Math.random() * pool.length);
+          fresh.push({ id: pool[i].id, progress: 0, claimed: false });
+          pool.splice(i, 1);
+        }
+        s.game.missions.list = [...keep, ...fresh];
       });
-      Bus.emit('theme');
     },
 
     /* ---------- Tela de Conquistas ---------- */
@@ -527,33 +519,9 @@
           </div>
         </div>` : ''}
 
-        <div class="card">
-          <div class="card-head"><h3>🛍️ Loja de recompensas</h3><span class="pill">🪙 ${Math.max(0, g.coins)}</span></div>
-          <p class="muted small">Ganhe moedas concluindo tarefas, Pomodoros, missões e conquistas. Troque por temas e mascotes!</p>
-          <h4 class="shop-title">Cores do tema</h4>
-          <div class="shop">
-            ${Object.entries(ACCENTS).map(([k, a]) => {
-              const owned = g.unlocked.accents.includes(k);
-              const equipped = s.settings.accent === k;
-              return `<div class="shop-item ${equipped ? 'equipped' : ''}">
-                <div class="swatch" style="background:linear-gradient(135deg, ${a.color}, ${a.color2})"></div>
-                <strong>${a.name}</strong>
-                ${equipped ? '<span class="pill pill-success">Em uso</span>' : owned ? `<button class="btn btn-sm" data-action="equip" data-kind="accent" data-key="${k}">Usar</button>` : `<button class="btn btn-sm btn-primary" data-action="buy" data-kind="accent" data-key="${k}" ${g.coins < a.price ? 'disabled' : ''}>🪙 ${a.price}</button>`}
-              </div>`;
-            }).join('')}
-          </div>
-          <h4 class="shop-title">Mascotes</h4>
-          <div class="shop">
-            ${Object.entries(MASCOTS).map(([k, m]) => {
-              const owned = g.unlocked.mascots.includes(k);
-              const equipped = s.settings.mascot === k;
-              return `<div class="shop-item ${equipped ? 'equipped' : ''}">
-                <div class="mascot-big">${k}</div>
-                <strong>${m.name}</strong>
-                ${equipped ? '<span class="pill pill-success">Em uso</span>' : owned ? `<button class="btn btn-sm" data-action="equip" data-kind="mascot" data-key="${k}">Usar</button>` : `<button class="btn btn-sm btn-primary" data-action="buy" data-kind="mascot" data-key="${k}" ${g.coins < m.price ? 'disabled' : ''}>🪙 ${m.price}</button>`}
-              </div>`;
-            }).join('')}
-          </div>
+        <div class="card shop-teaser">
+          <div><h3>🛍️ Loja de recompensas</h3><p class="muted small">Você tem 🪙 ${Math.max(0, g.coins)} moedas · ${Shop.collectionSize()} itens na coleção. Temas, fundos, mascotes, efeitos, sons, títulos e poderes!</p></div>
+          <button class="btn btn-primary" data-action="go" data-view="shop">Abrir a loja</button>
         </div>`;
     },
 

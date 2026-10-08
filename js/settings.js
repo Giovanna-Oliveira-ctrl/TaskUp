@@ -155,7 +155,7 @@
           <section class="card about">
             <h3>ℹ️ Sobre</h3>
             <p class="muted small">TaskUp · organizador pessoal offline. Sem contas, sem servidores, sem rastreamento. Feito com HTML, CSS e JavaScript puro.</p>
-            <p class="muted small">Atalhos: <kbd>N</kbd> nova tarefa · <kbd>/</kbd> buscar · <kbd>1</kbd>–<kbd>7</kbd> navegar · <kbd>P</kbd> play/pause Pomodoro · <kbd>T</kbd> tema · <kbd>?</kbd> ajuda · <kbd>Esc</kbd> fechar</p>
+            <p class="muted small">Atalhos: <kbd>N</kbd> nova tarefa · <kbd>/</kbd> buscar · <kbd>1</kbd>–<kbd>9</kbd> navegar · <kbd>P</kbd> play/pause Pomodoro · <kbd>T</kbd> tema · <kbd>?</kbd> ajuda · <kbd>Esc</kbd> fechar</p>
             <div class="row gap wrap"><button class="btn btn-sm btn-ghost" data-action="shortcuts">⌨️ Atalhos de teclado</button><button class="btn btn-sm btn-ghost" data-action="show-onboarding">👋 Rever boas-vindas</button></div>
           </section>
         </div>`;

@@ -19,6 +19,7 @@
     pomodoro: { title: 'Pomodoro', icon: '🍅', mod: () => TU.Pomodoro },
     categories: { title: 'Categorias', icon: '🗂️', mod: () => TU.Categories },
     game: { title: 'Conquistas', icon: '🏆', mod: () => Game },
+    shop: { title: 'Loja', icon: '🛍️', mod: () => TU.Shop },
     settings: { title: 'Configurações', icon: '⚙️', mod: () => TU.Settings },
   };
   const NAV_ORDER = Object.keys(VIEWS);
@@ -154,6 +155,7 @@
               <div>
                 <strong>${U.escape(st.name || 'Você')}</strong>
                 <small>Nv. ${li.level} · ${li.title}</small>
+                ${TU.Shop.titleText() ? `<span class="user-title">${U.escape(TU.Shop.titleText())}</span>` : ''}
               </div>
             </div>
             ${st.showXP ? `<div class="progress sm xp"><span style="width:${li.pct}%"></span></div>
@@ -166,7 +168,8 @@
         if (!xpChip.hidden) {
           const li = Game.levelInfo();
           xpChip.innerHTML = `<span class="xc-level">${li.level}</span><span class="xc-bar"><i style="width:${li.pct}%"></i></span>`;
-          xpChip.title = `Nível ${li.level} · ${li.current}/${li.needed} XP`;
+          xpChip.title = `Nível ${li.level} · ${li.current}/${li.needed} XP${TU.Shop.boostActive() ? ' · ⚡ XP em dobro ativo' : ''}`;
+          xpChip.classList.toggle('boost', TU.Shop.boostActive());
         }
       }
       Pomodoro.tick();
@@ -182,6 +185,9 @@
       root.style.setProperty('--accent', a.color);
       root.style.setProperty('--accent-2', a.color2);
       root.style.setProperty('--accent-soft', U.hexToRgba(a.color, dark ? 0.22 : 0.12));
+      root.classList.toggle('rainbow', !!a.rainbow);
+      // fundo comprado na loja (só com a gamificação ligada)
+      document.body.dataset.bg = st.gamification ? st.background || 'none' : 'none';
       const meta = document.querySelector('meta[name="theme-color"]');
       if (meta) meta.setAttribute('content', dark ? '#0f0f1a' : a.color);
       const tb = document.getElementById('theme-toggle');
@@ -278,6 +284,7 @@
       Store.load();
       App.applyTheme();
       Game.ensureMissions();
+      TU.Shop.applyFreezes();
 
       // links de navegação
       const navHtml = NAV_ORDER.map(
@@ -350,7 +357,7 @@
       const rows = [
         ['N', 'Nova tarefa'],
         ['/', 'Buscar tarefas'],
-        ['1 – 8', 'Ir para Início, Rotina, Tarefas, Calendário, Pomodoro, Categorias, Conquistas, Configurações'],
+        ['1 – 9', 'Ir para Início, Rotina, Tarefas, Calendário, Pomodoro, Categorias, Conquistas, Loja, Configurações'],
         ['P', 'Iniciar / pausar o Pomodoro'],
         ['T', 'Alternar tema claro / escuro'],
         ['?', 'Mostrar esta ajuda'],
@@ -375,6 +382,7 @@
         lastDay = today;
         TU.Dashboard._motivation = null;
         Game.ensureMissions();
+        TU.Shop.applyFreezes();
         Backup.autoSnapshot();
         App.queueRender();
         return;
@@ -457,7 +465,7 @@
           App.showShortcuts();
         } else if (k === 't') {
           Actions['theme-toggle']();
-        } else if (/^[1-8]$/.test(k)) {
+        } else if (/^[1-9]$/.test(k)) {
           App.go(NAV_ORDER[+k - 1]);
         }
       });
@@ -510,8 +518,6 @@
     App.go('tasks');
   };
   Actions['shortcuts'] = () => App.showShortcuts();
-  Actions['equip'] = (el) => Game.equip(el.dataset.kind, el.dataset.key);
-  Actions['buy'] = (el) => Game.buy(el.dataset.kind, el.dataset.key);
   Actions['claim-mission'] = (el) => Game.claimMission(el.dataset.id);
   Actions['claim-weekly'] = () => Game.claimWeekly();
   Actions['enable-game'] = () => {
