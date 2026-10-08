@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="TaskUp — organizador pessoal de tarefas, rotina e lembretes, gamificado e 100% offline.">
+  <meta name="theme-color" content="#7c5cff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="TaskUp">
+  <title>TaskUp</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="assets/icons/icon.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script>
+    // aplica o tema antes de pintar a tela (evita "flash" claro no modo escuro)
+    (function () {
+      try {
+        var s = JSON.parse(localStorage.getItem('taskup:data:v1') || '{}').settings || {};
+        var t = s.theme || 'auto';
+        var dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#view">Pular para o conteúdo</a>
+
+  <div class="app">
+    <aside class="sidebar" aria-label="Menu principal">
+      <div class="brand">
+        <span class="brand-logo">✓</span>
+        <span class="brand-name">Task<b>Up</b></span>
+      </div>
+      <div id="side-profile" class="side-profile" data-action="go" data-view="game" role="button" tabindex="0" hidden></div>
+      <nav id="side-nav" class="side-nav"></nav>
+      <div class="side-footer">
+        <button id="install-btn" class="btn btn-block" data-action="install" hidden>📲 Instalar app</button>
+        <p class="muted small offline-note">🔒 100% offline · dados só neste dispositivo</p>
+      </div>
+    </aside>
+    <div id="scrim" class="scrim"></div>
+
+    <div class="main">
+      <header class="topbar">
+        <button id="menu-btn" class="icon-btn menu-btn" aria-label="Abrir menu">☰</button>
+        <h1 id="page-title" class="page-title">Início</h1>
+        <div class="topbar-actions">
+          <button id="pomo-chip" class="pomo-chip" data-action="pomo-chip" hidden title="Pomodoro em andamento">
+            <span class="pc-emoji">🍅</span><span class="pc-time">25:00</span>
+          </button>
+          <button id="xp-chip" class="xp-chip" data-action="go" data-view="game" hidden></button>
+          <button id="theme-toggle" class="icon-btn" data-action="theme-toggle" aria-label="Alternar tema claro/escuro">🌙</button>
+          <button class="btn btn-primary new-btn" data-action="quick-new" title="Nova tarefa (N)"><span>＋</span><span class="hide-sm"> Nova tarefa</span></button>
+        </div>
+      </header>
+
+      <main id="view" class="view" tabindex="-1"></main>
+    </div>
+  </div>
+
+  <nav id="bottom-nav" class="bottom-nav" aria-label="Navegação rápida"></nav>
+  <button class="fab" data-action="quick-new" aria-label="Nova tarefa">＋</button>
+
+  <div id="modal-root"></div>
+  <div id="toast-root" class="toast-root" aria-live="polite"></div>
+  <canvas id="confetti" class="confetti" aria-hidden="true"></canvas>
+
+  <noscript><p style="padding:2rem;text-align:center">O TaskUp precisa de JavaScript ativado para funcionar.</p></noscript>
+
+  <!-- Ordem importa: cada módulo depende dos anteriores -->
+  <script src="js/utils.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/gamification.js"></script>
+  <script src="js/tasks.js"></script>
+  <script src="js/routine.js"></script>
+  <script src="js/calendar.js"></script>
+  <script src="js/pomodoro.js"></script>
+  <script src="js/notifications.js"></script>
+  <script src="js/backup.js"></script>
+  <script src="js/categories.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
