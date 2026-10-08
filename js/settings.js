@@ -132,6 +132,8 @@
             ${toggle('pomodoro.autoStartFocus', 'Iniciar foco automaticamente após a pausa')}
           </section>
 
+          ${window.TU.Security.settingsHtml()}
+
           <section class="card" id="sec-data">
             <h3>💾 Seus dados</h3>
             <p class="muted small">Tudo fica salvo somente neste dispositivo (${kb} KB usados). Faça backups para não perder nada ao trocar de navegador ou limpar dados.

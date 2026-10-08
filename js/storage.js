@@ -8,6 +8,7 @@
 
   const { U, Bus } = window.TU;
   const KEY = 'taskup:data:v1';
+  const MIRROR_KEY = 'taskup:data:v1:mirror';
   const VERSION = 1;
 
   const DEFAULT_CATEGORIES = [
@@ -233,16 +234,47 @@
         try {
           state = Store.hydrate(JSON.parse(raw));
         } catch (e) {
-          console.error('Dados corrompidos, iniciando do zero', e);
+          console.error('Dados corrompidos', e);
           try {
             U.storage.setItem(KEY + ':corrupted:' + Date.now(), raw);
           } catch (_) {}
-          state = defaultState();
+          // recuperação automática: usa a cópia automática mais recente que estiver íntegra
+          state = Store.recoverFromSnapshot() || defaultState();
+          dirty = true;
+          debouncedSave();
         }
       } else {
         state = defaultState();
       }
       return state;
+    },
+
+    /** Procura a cópia válida mais recente: primeiro a cópia espelho (último estado
+        salvo), depois as cópias automáticas diárias, da mais nova para a mais antiga. */
+    recoverFromSnapshot() {
+      const candidates = [];
+      const mirror = U.storage.getItem(MIRROR_KEY);
+      if (mirror) candidates.push({ label: 'espelho', raw: mirror, at: Infinity });
+      const prefix = 'taskup:snapshot:';
+      U.storage.keys().forEach((k) => {
+        if (!k || !k.startsWith(prefix)) return;
+        const raw = U.storage.getItem(k);
+        let at = 0;
+        try {
+          at = Date.parse(JSON.parse(raw).snapshotAt) || 0;
+        } catch (_) {}
+        candidates.push({ label: k.slice(prefix.length), raw, at });
+      });
+      candidates.sort((a, b) => b.at - a.at);
+      for (const c of candidates) {
+        try {
+          const st = Store.hydrate(JSON.parse(c.raw));
+          delete st.snapshotAt;
+          Store.recoveredFrom = c.label === 'espelho' ? 'cópia espelho (último salvamento)' : `cópia automática "${c.label}"`;
+          return st;
+        } catch (_) {}
+      }
+      return null;
     },
 
     /** Valida e completa um objeto de estado (usado no load e na importação). */
@@ -301,7 +333,12 @@
     saveNow() {
       dirty = false;
       try {
-        U.storage.setItem(KEY, JSON.stringify(state));
+        const json = JSON.stringify(state);
+        U.storage.setItem(KEY, json);
+        // cópia espelho: se a principal se corromper, o app recupera o último estado
+        try {
+          U.storage.setItem(MIRROR_KEY, json);
+        } catch (_) {}
       } catch (e) {
         console.error('Falha ao salvar', e);
         Bus.emit('toast', { text: 'Não foi possível salvar os dados (armazenamento cheio?)', type: 'error' });
@@ -343,6 +380,7 @@
   // Salva imediatamente ao sair / esconder a página (só se houver algo pendente,
   // para uma aba antiga não sobrescrever dados mais novos de outra aba)
   window.addEventListener('pagehide', () => state && dirty && Store.saveNow());
+  window.addEventListener('beforeunload', () => state && dirty && Store.saveNow());
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden' && state && dirty) Store.saveNow();
   });

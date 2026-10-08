@@ -331,6 +331,7 @@
 
       setTimeout(() => App.onboarding(), 400);
       App.protectData();
+      if (Store.recoveredFrom) UI.toast(`Os dados salvos estavam danificados e foram recuperados automaticamente da ${Store.recoveredFrom}.`, { type: 'error', icon: '🛟', duration: 12000 });
       if (!Store.storageOk) UI.toast('Modo de visualização: o armazenamento está bloqueado aqui, então os dados não serão salvos. Baixe o arquivo e abra no navegador para salvar.', { type: 'error', duration: 10000 });
       App.registerSW();
     },

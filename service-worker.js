@@ -3,13 +3,15 @@
    Cache "offline-first" de todos os arquivos do app.
    Altere CACHE_VERSION ao publicar mudanças.
    ========================================================= */
-const CACHE_VERSION = 'taskup-v2';
+const CACHE_VERSION = 'taskup-v3';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './css/style.css',
+  './js/boot.js',
   './js/utils.js',
+  './js/crypto.js',
   './js/storage.js',
   './js/ui.js',
   './js/shop.js',
@@ -20,6 +22,7 @@ const ASSETS = [
   './js/pomodoro.js',
   './js/notifications.js',
   './js/backup.js',
+  './js/security.js',
   './js/categories.js',
   './js/settings.js',
   './js/dashboard.js',

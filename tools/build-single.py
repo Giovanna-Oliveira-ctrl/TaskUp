@@ -11,6 +11,9 @@ html = html.replace('<link rel="stylesheet" href="css/style.css">', '<style>\n' 
 html = re.sub(r'\s*<link rel="(manifest|icon|apple-touch-icon)"[^>]*>', '', html)
 svg = base64.b64encode(read('assets/icons/icon.svg').encode()).decode()
 html = html.replace('<title>TaskUp</title>', '<title>TaskUp</title>\n  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,' + svg + '">')
+# no arquivo único todo o código fica embutido: a política precisa permitir scripts inline
+html = html.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")
+html = re.sub(r"(<meta http-equiv=\"Content-Security-Policy\"[^>]*?)worker-src 'self'; manifest-src 'self'", r"\1worker-src 'none'", html)
 html = re.sub(r'<script src="(js/[\w.]+)"></script>', lambda m: '<script>\n' + read(m.group(1)).replace('</script', '<\\/script') + '\n</script>', html)
 
 os.makedirs(os.path.dirname(out), exist_ok=True)

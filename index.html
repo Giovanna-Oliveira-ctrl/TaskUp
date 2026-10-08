@@ -2,6 +2,9 @@
 <html lang="pt-BR" data-theme="light">
 <head>
   <meta charset="UTF-8">
+  <!-- Política de segurança: só código do próprio app, nenhuma conexão de rede -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'self'; manifest-src 'self'">
+  <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="TaskUp — organizador pessoal de tarefas, rotina e lembretes, gamificado e 100% offline.">
   <meta name="theme-color" content="#7c5cff">
@@ -15,17 +18,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="css/style.css">
-  <script>
-    // aplica o tema antes de pintar a tela (evita "flash" claro no modo escuro)
-    (function () {
-      try {
-        var s = JSON.parse(localStorage.getItem('taskup:data:v1') || '{}').settings || {};
-        var t = s.theme || 'auto';
-        var dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
-        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-      } catch (e) {}
-    })();
-  </script>
+  <script src="js/boot.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#view">Pular para o conteúdo</a>
@@ -74,6 +67,7 @@
 
   <!-- Ordem importa: cada módulo depende dos anteriores -->
   <script src="js/utils.js"></script>
+  <script src="js/crypto.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/shop.js"></script>
@@ -84,6 +78,7 @@
   <script src="js/pomodoro.js"></script>
   <script src="js/notifications.js"></script>
   <script src="js/backup.js"></script>
+  <script src="js/security.js"></script>
   <script src="js/categories.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/dashboard.js"></script>

@@ -11,11 +11,32 @@
   const MAX_SNAPSHOTS = 5;
 
   const Backup = {
-    exportJSON() {
-      const data = JSON.stringify({ ...Store.state, exportedAt: new Date().toISOString() }, null, 2);
-      U.download(`taskup-backup-${U.today()}.json`, data, 'application/json');
+    /** Pergunta se o arquivo deve ser protegido por senha e exporta. */
+    async exportJSON() {
+      const Sec = window.TU.Security;
+      let password = null;
+      if (Sec && window.TU.Crypto.available) {
+        password = await Sec.askPassword({
+          title: '💾 Exportar backup',
+          text: 'Opcional: proteja <strong>só o arquivo de backup</strong> com senha (criptografia AES-256), útil se for guardá-lo na nuvem, e-mail ou pen drive. <strong>Deixe em branco para exportar sem senha.</strong> O app continua abrindo normalmente, sem senha.',
+          confirm: true,
+          optional: true,
+          okText: 'Exportar',
+        });
+        if (password === undefined) return; // cancelou
+      }
+      const { notified, ...rest } = Store.state;
+      void notified;
+      const json = JSON.stringify({ ...rest, exportedAt: new Date().toISOString() }, null, 2);
+      let content = json;
+      let name = `taskup-backup-${U.today()}.json`;
+      if (password) {
+        content = JSON.stringify(await window.TU.Crypto.encryptWithPassword(password, json, 'backup'));
+        name = `taskup-backup-protegido-${U.today()}.json`;
+      }
+      U.download(name, content, 'application/json');
       Store.update((s) => (s.settings.lastBackup = new Date().toISOString()));
-      UI.toast('Backup exportado! Guarde o arquivo em local seguro.', { type: 'success', icon: '💾' });
+      UI.toast(password ? 'Backup protegido por senha exportado! 🔐' : 'Backup exportado! Guarde o arquivo em local seguro.', { type: 'success', icon: '💾' });
     },
 
     exportCSV() {
@@ -51,6 +72,10 @@
         let data;
         try {
           data = JSON.parse(reader.result);
+          if (window.TU.Crypto && window.TU.Crypto.isEnvelope(data)) {
+            data = await Backup.openProtected(data);
+            if (!data) return;
+          }
           if (data.app !== 'TaskUp' || !Array.isArray(data.tasks)) throw new Error('Arquivo não é um backup do TaskUp');
         } catch (e) {
           UI.toast('Arquivo inválido: ' + e.message, { type: 'error', duration: 6000 });
@@ -76,10 +101,26 @@
       reader.readAsText(file);
     },
 
-    /* ---------- Cópias automáticas no próprio navegador ---------- */
+    /** Pede a senha de um backup protegido (até acertar ou cancelar). */
+    async openProtected(envelope) {
+      let error = '';
+      for (;;) {
+        const pw = await window.TU.Security.askPassword({ title: '🔐 Backup protegido', text: 'Este arquivo está protegido por senha. Digite a senha usada ao exportar.', error, okText: 'Abrir' });
+        if (!pw) return null;
+        try {
+          const { text } = await window.TU.Crypto.decryptWithPassword(pw, envelope);
+          return JSON.parse(text);
+        } catch (_) {
+          error = 'Senha incorreta (ou arquivo alterado). Tente de novo.';
+        }
+      }
+    },
+
+    /* ---------- Cópias automáticas no próprio navegador ----------
+       Também servem para a recuperação automática se os dados se corromperem. */
     snapshot(label = U.today()) {
       try {
-        U.storage.setItem(SNAP_PREFIX + label, JSON.stringify(Store.state));
+        U.storage.setItem(SNAP_PREFIX + label, JSON.stringify({ ...Store.state, snapshotAt: new Date().toISOString() }));
         Backup.pruneSnapshots();
       } catch (e) {
         console.warn('Snapshot falhou', e);
@@ -114,11 +155,13 @@
       const ok = await UI.confirm({ title: 'Restaurar cópia automática?', text: `Cópia: <strong>${U.escape(label)}</strong>. Os dados atuais serão substituídos.`, okText: 'Restaurar', icon: '🕰️' });
       if (!ok) return;
       try {
-        Store.replace(JSON.parse(raw));
+        const obj = JSON.parse(raw);
+        delete obj.snapshotAt;
+        Store.replace(obj);
         window.TU.App.applyTheme();
         UI.toast('Cópia restaurada!', { type: 'success' });
       } catch (e) {
-        UI.toast('Cópia corrompida', { type: 'error' });
+        UI.toast('Não foi possível abrir a cópia: ' + e.message, { type: 'error' });
       }
     },
 
