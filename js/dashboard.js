@@ -60,7 +60,7 @@
         <section class="hero card">
           <div class="hero-text">
             <p class="kicker">${U.formatDateLong(today)}${gameOn && window.TU.Shop.titleText() ? ` · <span class="user-title">${U.escape(window.TU.Shop.titleText())}</span>` : ''}${gameOn && window.TU.Shop.boostActive() ? ' · <span class="pill pill-live">⚡ XP em dobro</span>' : ''}</p>
-            <h1>${g.text}${name}! <span class="wave">${g.emoji}</span></h1>
+            <h2 class="hero-title">${g.text}${name}! <span class="wave" aria-hidden="true">${g.emoji}</span></h2>
             <p class="hero-sub">${gameOn && st.motivation ? Dashboard._motivation : 'Vamos fazer acontecer hoje?'}</p>
             <div class="row gap wrap mt">
               <button class="btn btn-primary" data-action="new-task" data-date="${today}">＋ Nova tarefa</button>
@@ -141,7 +141,7 @@
             </div>
             <form class="quick-add mini" data-form="dash-quick">
               <input class="input" name="q" placeholder="Adicionar rapidinho para hoje..." autocomplete="off" aria-label="Adicionar tarefa para hoje">
-              <button class="btn btn-primary" type="submit">＋</button>
+              <button class="btn btn-primary" type="submit" aria-label="Adicionar tarefa para hoje">＋</button>
             </form>
           </section>
 

@@ -236,13 +236,14 @@
     const w = weeklyProgress();
     if (w.claimed || w.done < w.target) return;
     const before = levelFromXp(game().xp);
+    const xp = boosted(WEEKLY_REWARD.xp);
     Store.update((s) => {
       s.game.weekly.claimed = true;
-      addXp(s.game, U.today(), boosted(WEEKLY_REWARD.xp), WEEKLY_REWARD.coins);
+      addXp(s.game, U.today(), xp, WEEKLY_REWARD.coins);
     });
     Sound.play('coin');
     celebrate({ big: true });
-    UI.toast(`Desafio semanal concluído! +${WEEKLY_REWARD.xp} XP`, { type: 'achievement', icon: '🏅' });
+    UI.toast(`Desafio semanal concluído! +${xp} XP`, { type: 'achievement', icon: '🏅' });
     afterXp(before);
   }
 
@@ -395,7 +396,9 @@
       if (task.createdAt && U.dateKey(new Date(task.createdAt)) === U.today() && !task.spawnedFrom) bumpMission('create', -1);
     },
 
-    onPomodoro(s, minutes) {
+    /** Recompensa proporcional à duração: foco de 25 min = 15 XP e 3 moedas.
+        Sessões com menos de 10 min ou sem ninguém presente contam só nas estatísticas. */
+    onPomodoro(s, minutes, rewarded = true) {
       const g = s.game;
       const today = U.today();
       g.totalPomodoros++;
@@ -403,11 +406,13 @@
       g.pomodorosByDate[today] = (g.pomodorosByDate[today] || 0) + 1;
       g.focusByDate = g.focusByDate || {};
       g.focusByDate[today] = (g.focusByDate[today] || 0) + minutes;
-      const xp = boosted(15);
-      addXp(g, today, xp, 3);
+      if (!rewarded || minutes < 10) return { xp: 0, coins: 0 };
+      const xp = boosted(Math.round((15 * Math.min(minutes, 60)) / 25));
+      const coins = Math.max(1, Math.round((3 * Math.min(minutes, 60)) / 25));
+      addXp(g, today, xp, coins);
       touchStreak(g, today);
       bumpMission('pomo');
-      return { xp, coins: 3 };
+      return { xp, coins };
     },
 
     /** Feedback visual/sonoro após concluir (fora do Store.update). */
@@ -422,14 +427,6 @@
       }
       checkAchievements({ hour: new Date().getHours(), allDone });
       afterXp(levelBefore);
-    },
-
-    buy(kind, key) {
-      Shop.buy(kind, key);
-    },
-
-    equip(kind, key) {
-      Shop.equip(kind, key);
     },
 
     /** Troca as missões ainda não resgatadas por outras (poder da loja). */

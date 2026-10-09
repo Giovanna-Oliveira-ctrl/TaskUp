@@ -60,6 +60,7 @@
       rendered = current;
       const keepScroll = !changed && !scrollTop ? window.scrollY : 0;
       const def = VIEWS[current];
+      TU.Tasks.closeMenu(); // menu "⋯" não pode ficar solto após redesenhar
       if (changed && current === 'routine') TU.Routine._scrollNow = true;
       view.dataset.view = current;
       // preserva o que o usuário está digitando quando a tela é redesenhada em segundo plano
@@ -399,7 +400,9 @@
         return;
       }
       // atualiza indicadores de horário sem atrapalhar o usuário
-      const busy = document.querySelector('.modal-backdrop') || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+      // não redesenha se o usuário estiver no meio de algo (janela, menu, seletor de emoji, digitando)
+      const busy =
+        document.querySelector('.modal-backdrop, .popover, .emoji-grid:not([hidden])') || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
       if (!busy && ['routine', 'dashboard', 'tasks'].includes(current) && document.visibilityState === 'visible') App.render();
     },
 

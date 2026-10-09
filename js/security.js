@@ -27,6 +27,7 @@
     /* ---------- Janela de senha reutilizável ----------
        Resolve com a senha, '' (opcional e em branco) ou undefined (cancelado). */
     askPassword({ title = '🔐 Senha', text = '', confirm = false, optional = false, strength = false, okText = 'Continuar', error = '', autocomplete = 'current-password' } = {}) {
+      const uid = U.uid();
       return new Promise((resolve) => {
         let done = false;
         UI.modal({
@@ -35,12 +36,12 @@
           body: `
             <div class="form pw-form">
               ${text ? `<p class="muted small">${text}</p>` : ''}
-              <label class="field"><span>Senha</span>
+              <div class="field"><label for="pw1-${uid}">Senha</label>
                 <div class="pw-field">
-                  <input type="password" class="input input-lg" data-pw1 autocomplete="${confirm ? 'new-password' : autocomplete}" maxlength="128" autofocus>
-                  <button type="button" class="icon-btn" data-toggle-pw aria-label="Mostrar senha">👁️</button>
+                  <input type="password" id="pw1-${uid}" class="input input-lg" data-pw1 autocomplete="${confirm ? 'new-password' : autocomplete}" maxlength="128" autofocus>
+                  <button type="button" class="icon-btn" data-toggle-pw aria-label="Mostrar senha" aria-pressed="false">👁️</button>
                 </div>
-              </label>
+              </div>
               ${strength ? `<div class="pw-meter"><i></i><i></i><i></i><i></i></div><span class="pw-meter-label muted small"></span>` : ''}
               ${confirm ? `<label class="field"><span>Repita a senha</span><input type="password" class="input input-lg" data-pw2 autocomplete="new-password" maxlength="128"></label>` : ''}
               <p class="pw-error" role="alert">${U.escape(error)}</p>
@@ -61,6 +62,7 @@
             el.querySelector('[data-toggle-pw]').onclick = () => {
               p1.type = p1.type === 'password' ? 'text' : 'password';
               if (p2) p2.type = p1.type;
+              el.querySelector('[data-toggle-pw]').setAttribute('aria-pressed', String(p1.type === 'text'));
             };
             if (meter) {
               p1.addEventListener('input', () => {

@@ -19,7 +19,7 @@
           <form class="form" autocomplete="off">
             <div class="field-row title-row">
               ${UI.emojiPicker(c.emoji)}
-              <input class="input input-lg" name="name" placeholder="Nome da categoria" value="${U.escape(c.name)}" required maxlength="40" autofocus>
+              <input class="input input-lg" name="name" aria-label="Nome da categoria" placeholder="Nome da categoria" value="${U.escape(c.name)}" required maxlength="40" autofocus>
             </div>
             <div class="field">
               <label>Cor</label>
@@ -82,7 +82,7 @@
       const count = s.tasks.filter((t) => t.categoryId === id).length;
       if (!count) {
         const ok = await UI.confirm({ title: `Excluir "${cat.name}"?`, okText: 'Excluir', danger: true, icon: cat.emoji });
-        if (ok) Store.update((st) => (st.categories = st.categories.filter((c) => c.id !== id)));
+        if (ok) Store.update((st) => ((st.categories = st.categories.filter((c) => c.id !== id)), Categories.resetFilter(id)));
         return;
       }
       UI.modal({
@@ -107,15 +107,23 @@
           el.querySelector('[data-ok]').onclick = () => {
             const target = el.querySelector('[data-move]').value;
             Store.update((st) => {
-              if (target === '__delete') st.tasks = st.tasks.filter((t) => t.categoryId !== id);
+              if (target === '__delete') {
+                st.tasks.filter((t) => t.categoryId === id).forEach((t) => Game.onTaskRemoved(t));
+                st.tasks = st.tasks.filter((t) => t.categoryId !== id);
+              }
               else st.tasks.forEach((t) => t.categoryId === id && (t.categoryId = target));
-              st.categories = st.categories.filter((c) => c.id !== id);
+              (st.categories = st.categories.filter((c) => c.id !== id)), Categories.resetFilter(id);
             });
             api.close();
             UI.toast('Categoria excluída', { icon: '🗑️' });
           };
         },
       });
+    },
+
+    /** O filtro da tela Tarefas não pode apontar para uma categoria apagada. */
+    resetFilter(id) {
+      if (Tasks.filters.category === id) Tasks.filters.category = 'all';
     },
 
     move(id, dir) {

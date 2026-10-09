@@ -64,7 +64,7 @@
               <div class="accent-list">
                 ${Object.entries(Game.ACCENTS)
                   .map(([k, a]) => {
-                    const owned = !g || s.game.unlocked.accents.includes(k);
+                    const owned = s.game.unlocked.accents.includes(k);
                     return `<button class="accent-opt ${st.accent === k ? 'active' : ''}" ${owned ? `data-action="equip" data-kind="accent" data-key="${k}"` : 'disabled'} title="${a.name}${owned ? '' : ' (bloqueado)'}" style="background:linear-gradient(135deg, ${a.color}, ${a.color2})">${owned ? (st.accent === k ? '✓' : '') : '🔒'}</button>`;
                   })
                   .join('')}

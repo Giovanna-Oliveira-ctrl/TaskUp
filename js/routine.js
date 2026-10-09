@@ -74,9 +74,9 @@
                 </div>
               </div>
               <div class="tl-actions">
-                <button class="btn btn-sm ${t.done ? '' : 'btn-success'}" data-action="toggle-task" data-id="${t.id}">${t.done ? '↩️ Desfazer' : '✓ Concluir'}</button>
-                ${!t.done ? `<button class="btn btn-sm" data-action="pomo-task" data-id="${t.id}">🍅 Pomodoro</button>` : ''}
-                <button class="icon-btn" data-action="task-menu" data-id="${t.id}" title="Mais opções">⋯</button>
+                <button class="btn btn-sm ${t.done ? '' : 'btn-success'}" data-action="toggle-task" data-id="${t.id}" aria-label="${t.done ? 'Desfazer conclusão' : 'Concluir'}: ${U.escape(t.title)}">${t.done ? '↩️ Desfazer' : '✓ Concluir'}</button>
+                ${!t.done ? `<button class="btn btn-sm" data-action="pomo-task" data-id="${t.id}" aria-label="Iniciar Pomodoro: ${U.escape(t.title)}">🍅 Pomodoro</button>` : ''}
+                <button class="icon-btn" data-action="task-menu" data-id="${t.id}" title="Mais opções" aria-label="Mais opções: ${U.escape(t.title)}" aria-haspopup="menu" aria-expanded="false">⋯</button>
               </div>
             </div>
           </div>`;
@@ -121,7 +121,7 @@
                   const cat = Store.category(t.categoryId);
                   return `<div class="untimed-item ${t.done ? 'done' : ''}" style="--cat:${cat.color}">
                     <button class="check sm" data-action="toggle-task" data-id="${t.id}" aria-label="Concluir"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
-                    <span class="untimed-title" data-action="edit-task" data-id="${t.id}">${t.emoji || cat.emoji} ${U.escape(t.title)}</span>
+                    <button type="button" class="untimed-title" data-action="edit-task" data-id="${t.id}">${t.emoji || cat.emoji} ${U.escape(t.title)}</button>
                     <input type="time" class="time-input sm" data-change="routine-time" data-id="${t.id}" title="Definir horário" aria-label="Definir horário">
                   </div>`;
                 }).join('')}
@@ -130,7 +130,7 @@
 
             <div class="card">
               <div class="card-head"><h3>⚡ Modelos rápidos</h3></div>
-              <p class="muted small">Toque para adicionar em ${isToday ? 'hoje' : U.formatDateHuman(date).toLowerCase()}. Segure Shift para repetir todo dia.</p>
+              <p class="muted small">Toque para adicionar em ${isToday ? 'hoje' : U.formatDateHuman(date).toLowerCase()}. <span class="desktop-only">Segure Shift para repetir todo dia.</span></p>
               <div class="templates">
                 ${TEMPLATES.map((tp, i) => `<button class="template" data-action="routine-template" data-i="${i}">${tp.emoji} ${tp.title} <span>${tp.time}</span></button>`).join('')}
               </div>

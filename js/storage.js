@@ -100,6 +100,7 @@
         remaining: null, // segundos restantes quando pausado
         taskId: null,
         length: null, // duração (min) da sessão em andamento
+        unattended: false, // começou sozinha (início automático) e ninguém mexeu no app
         cycle: 0, // focos concluídos no ciclo atual
       },
       notified: {},
@@ -159,6 +160,7 @@
       snoozeUntil: finiteOrNull(t.snoozeUntil, 0, 8.64e15),
       wasOnTime: t.wasOnTime === true,
       wasMorning: t.wasMorning === true,
+      autoDoneSubs: (Array.isArray(t.autoDoneSubs) ? t.autoDoneSubs : []).filter(isId).slice(0, LIMITS.subtasks),
     };
   }
 
@@ -401,6 +403,7 @@
         taskId: isId(pi.taskId) ? pi.taskId : null,
         length: finiteOrNull(pi.length, 0, 1440),
         cycle: num(pi.cycle, 0, 0, 1e6),
+        unattended: pi.unattended === true,
       };
       if (pomodoro.running && !pomodoro.endAt) pomodoro.running = false;
       // lembretes já avisados
@@ -501,9 +504,13 @@
       return state.categories.find((c) => c.id === id) || state.categories.find((c) => c.id === 'cat-outros') || state.categories[0];
     },
 
+    /** Espaço usado por todos os dados do TaskUp (principal, espelho e cópias). */
     usageBytes() {
       try {
-        return (U.storage.getItem(KEY) || '').length * 2;
+        return U.storage
+          .keys()
+          .filter((k) => k && k.startsWith('taskup:'))
+          .reduce((n, k) => n + (k.length + (U.storage.getItem(k) || '').length) * 2, 0);
       } catch (_) {
         return 0;
       }

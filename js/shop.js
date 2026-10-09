@@ -137,11 +137,6 @@
       return !!k && (g().unlocked[k.unlock] || []).includes(key);
     },
 
-    equipped(kind) {
-      const k = U.own(KINDS, kind);
-      return k ? Store.state.settings[k.setting] : undefined;
-    },
-
     /** Quantos cosméticos o usuário possui (sem contar os gratuitos). */
     collectionSize() {
       return Object.values(KINDS).reduce((n, k) => n + Math.max(0, (g().unlocked[k.unlock] || []).length - 1), 0);
@@ -235,7 +230,11 @@
       Store.update((s) => (s.game.coins -= p.price));
       Sound.play('coin');
       if (key === 'freeze') {
-        Store.update((s) => (s.game.inventory.freeze = (s.game.inventory.freeze || 0) + 1));
+        Store.update((s) => {
+          s.game.inventory.freeze = (s.game.inventory.freeze || 0) + 1;
+          // a sequência já tinha quebrado antes da compra: o congelador vale só para o futuro
+          if (s.game.lastActiveDate && U.diffDays(s.game.lastActiveDate, U.today()) > 1) s.game.streak = 0;
+        });
         UI.toast(`Congelador guardado! Você tem ${g().inventory.freeze}.`, { type: 'success', icon: '🧊' });
       } else if (key === 'boost') {
         Store.update((s) => (s.game.boostUntil = Math.max(Date.now(), s.game.boostUntil || 0) + 3600000));

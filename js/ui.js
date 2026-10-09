@@ -16,7 +16,6 @@
     const icons = { info: '💬', success: '✅', error: '⚠️', xp: '⭐', achievement: '🏆' };
     const el = document.createElement('div');
     el.className = `toast toast-${type}`;
-    el.setAttribute('role', 'status');
     el.innerHTML = `
       <span class="toast-icon">${icon || icons[type] || '💬'}</span>
       <span class="toast-text">${U.escape(text)}</span>
@@ -49,26 +48,49 @@
   /* ---------------- Modais ---------------- */
   const stack = [];
 
-  function modal({ title = '', body = '', size = 'md', onMount, onClose, footer = '', className = '' } = {}) {
+  /** Só a janela do topo fica ativa: o app e janelas de baixo ficam inertes (teclado e leitor de tela). */
+  function syncInert() {
+    const top = stack[stack.length - 1];
+    ['.app', '#bottom-nav', '.fab', '.skip-link'].forEach((sel) => {
+      const el = document.querySelector(sel);
+      if (el) el.inert = !!top;
+    });
+    stack.forEach((m) => (m.wrap.inert = m !== top || m.closed));
+  }
+
+  let modalSeq = 0;
+  function modal({ title = '', label = '', body = '', size = 'md', onMount, onClose, footer = '', className = '' } = {}) {
     const root = document.getElementById('modal-root');
     const wrap = document.createElement('div');
+    const titleId = 'modal-title-' + ++modalSeq;
+    const opener = document.activeElement; // para devolver o foco ao fechar
     wrap.className = 'modal-backdrop';
     wrap.innerHTML = `
-      <div class="modal modal-${size} ${className}" role="dialog" aria-modal="true" aria-label="${U.escape(title)}">
-        ${title ? `<header class="modal-header"><h2>${title}</h2><button class="icon-btn modal-x" aria-label="Fechar">✕</button></header>` : ''}
+      <div class="modal modal-${size} ${className}" role="dialog" aria-modal="true" ${title ? `aria-labelledby="${titleId}"` : ''}>
+        ${title ? `<header class="modal-header"><h2 id="${titleId}">${title}</h2><button class="icon-btn modal-x" aria-label="Fechar">✕</button></header>` : ''}
         <div class="modal-body">${body}</div>
         ${footer ? `<footer class="modal-footer">${footer}</footer>` : ''}
       </div>`;
     root.appendChild(wrap);
     document.body.classList.add('no-scroll');
     requestAnimationFrame(() => wrap.classList.add('show'));
+    const dialog = wrap.querySelector('.modal');
+    if (!title) {
+      // sem título no cabeçalho: usa o primeiro título do conteúdo (ou o rótulo informado) como nome
+      const h = dialog.querySelector('h1, h2, h3');
+      if (h) {
+        h.id = titleId;
+        dialog.setAttribute('aria-labelledby', titleId);
+      } else dialog.setAttribute('aria-label', label || 'Janela');
+    }
 
-    let closed = false;
     const api = {
-      el: wrap.querySelector('.modal'),
+      el: dialog,
+      wrap,
+      closed: false,
       close(result) {
-        if (closed) return;
-        closed = true;
+        if (api.closed) return;
+        api.closed = true;
         // bloqueia novos cliques/Enter durante a animação de saída (evita envio duplo)
         wrap.classList.add('closing');
         wrap.inert = true;
@@ -76,24 +98,31 @@
         const i = stack.indexOf(api);
         if (i >= 0) stack.splice(i, 1);
         if (!stack.length) document.body.classList.remove('no-scroll');
+        syncInert();
         setTimeout(() => wrap.remove(), 200);
+        // devolve o foco a quem abriu a janela (se ainda estiver na tela)
+        if (opener && opener.isConnected && typeof opener.focus === 'function') {
+          setTimeout(() => opener.isConnected && opener.focus({ preventScroll: true }), 0);
+        }
         onClose && onClose(result);
       },
     };
     stack.push(api);
+    syncInert();
     wrap.addEventListener('mousedown', (e) => {
       if (e.target === wrap) api.close();
     });
     const x = wrap.querySelector('.modal-x');
     if (x) x.onclick = () => api.close();
     onMount && onMount(api.el, api);
-    // foco no primeiro campo
+    // foco no primeiro campo (ou no botão de fechar, se não houver campos)
     setTimeout(() => {
-      const f = api.el.querySelector('[autofocus], input:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea, select, button.btn-primary');
+      const f = api.el.querySelector('[autofocus], input:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea, select, button.btn-primary, .modal-x, button');
       f && f.focus({ preventScroll: true });
     }, 50);
     return api;
   }
+
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && stack.length) {
@@ -388,10 +417,10 @@
       <div class="color-picker">
         ${U.COLORS.map(
           (c) => `<label class="color-opt" style="--c:${c}">
-            <input type="radio" name="${name}" value="${c}" ${c === current ? 'checked' : ''}><span></span></label>`
+            <input type="radio" name="${name}" value="${c}" ${c === current ? 'checked' : ''} aria-label="Cor ${c}"><span></span></label>`
         ).join('')}
         <label class="color-opt color-custom" title="Cor personalizada">
-          <input type="color" name="${name}-custom" value="${/^#[0-9a-f]{6}$/i.test(current || '') ? current : '#7c5cff'}">
+          <input type="color" aria-label="Cor personalizada" name="${name}-custom" value="${/^#[0-9a-f]{6}$/i.test(current || '') ? current : '#7c5cff'}">
         </label>
       </div>`;
   }

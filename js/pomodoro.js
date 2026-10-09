@@ -33,10 +33,13 @@
       return p.remaining ?? Pomodoro.duration();
     },
 
-    start() {
+    /** auto = iniciado sozinho pelo "início automático" (sem ninguém clicar). */
+    start(auto = false) {
       const fresh = P().remaining === null || P().remaining === undefined;
       const rem = Pomodoro.remaining();
       Store.update((s) => {
+        // sessão que começou sozinha só dá recompensa se alguém mexer no app durante ela
+        if (fresh) s.pomodoro.unattended = auto === true;
         // guarda a duração real da sessão (mudar as configurações depois não altera a contagem)
         if (fresh || !s.pomodoro.length) s.pomodoro.length = rem / 60;
         s.pomodoro.running = true;
@@ -85,8 +88,12 @@
       Store.update((s) => (s.pomodoro.taskId = id || null));
     },
 
-    startForTask(id) {
+    async startForTask(id) {
       const p = P();
+      if (p.running && p.mode !== 'focus') {
+        const ok = await UI.confirm({ title: 'Interromper a pausa?', text: 'Você está em uma pausa. Começar o foco nesta tarefa agora?', okText: 'Começar foco', icon: '🍅' });
+        if (!ok) return;
+      }
       if (p.running && p.mode === 'focus' && p.taskId && p.taskId !== id) {
         // já existe foco em andamento: apenas troca a tarefa vinculada
         Pomodoro.setTask(id);
@@ -122,7 +129,7 @@
       Store.update((s) => {
         if (mode === 'focus') {
           if (completed) {
-            reward = Game.onPomodoro(s, Math.round(s.pomodoro.length || +cfg().focus));
+            reward = Game.onPomodoro(s, Math.round(s.pomodoro.length || +cfg().focus), !s.pomodoro.unattended);
             if (task) {
               const t = s.tasks.find((x) => x.id === task.id);
               if (t) t.pomodoros = (t.pomodoros || 0) + 1;
@@ -132,6 +139,7 @@
           next = completed && s.pomodoro.cycle % Math.max(1, +cfg().longEvery) === 0 ? 'long' : 'short';
         }
         s.pomodoro.length = null;
+        s.pomodoro.unattended = false;
         s.pomodoro.mode = next;
         s.pomodoro.running = false;
         s.pomodoro.endAt = null;
@@ -143,7 +151,7 @@
         const title = mode === 'focus' ? '🍅 Pomodoro concluído!' : '⏰ Pausa encerrada!';
         const body = mode === 'focus' ? `Hora de uma ${MODES[next].label.toLowerCase()}. ${task ? `Foco em "${task.title}" registrado.` : ''}` : 'Bora voltar ao foco? 💪';
         window.TU.Notify && window.TU.Notify.show(title, body, { tag: 'pomodoro', toast: false });
-        UI.toast(`${title} ${reward && Game.enabled('showXP') ? `+${reward.xp} XP` : ''}`, { type: mode === 'focus' ? 'xp' : 'info', icon: mode === 'focus' ? '🍅' : '⏰', duration: 5000 });
+        UI.toast(`${title} ${reward && reward.xp && Game.enabled('showXP') ? `+${reward.xp} XP` : ''}`, { type: mode === 'focus' ? 'xp' : 'info', icon: mode === 'focus' ? '🍅' : '⏰', duration: 5000 });
         if (mode === 'focus') {
           Game.celebrate({});
           Game.checkAchievements();
@@ -153,7 +161,7 @@
         }
         Game.afterXp(levelBefore);
         const auto = next === 'focus' ? cfg().autoStartFocus : cfg().autoStartBreaks;
-        if (auto) setTimeout(() => Pomodoro.start(), 800);
+        if (auto) setTimeout(() => Pomodoro.start(true), 800);
       }
     },
 
@@ -240,7 +248,7 @@
           <div class="pomo-side">
             <div class="card">
               <div class="card-head"><h3>🎯 Focar em</h3></div>
-              <select class="input" data-change="pomo-task">
+              <select class="input" data-change="pomo-task" aria-label="Tarefa em foco">
                 <option value="">— Foco livre (sem tarefa) —</option>
                 ${pendingTasks.map((t) => `<option value="${t.id}" ${t.id === p.taskId ? 'selected' : ''}>${t.emoji || Store.category(t.categoryId).emoji} ${U.escape(t.title)}${t.time ? ' · ' + t.time : ''}</option>`).join('')}
                 ${task && !pendingTasks.includes(task) ? `<option value="${task.id}" selected>${U.escape(task.title)}</option>` : ''}
@@ -264,6 +272,7 @@
                 <li>📵 Silencie o celular e feche abas que distraem.</li>
                 <li>💧 Use as pausas para beber água e alongar.</li>
                 <li>🧠 Uma tarefa por vez — multitarefa é ilusão!</li>
+                <li>⭐ Focos de 10 min ou mais valem XP e moedas (proporcional ao tempo).</li>
               </ul>
             </div>
           </div>
@@ -300,6 +309,13 @@
     Pomodoro.setMode(el.value);
   };
   window.TU.Changes['pomo-task'] = (el) => Pomodoro.setTask(el.value);
+
+  // alguém mexeu no app: a sessão automática em andamento passa a valer recompensa
+  const present = () => {
+    const p = Store.state && Store.state.pomodoro;
+    if (p && p.unattended && p.running) Store.update((s) => (s.pomodoro.unattended = false), { silent: true });
+  };
+  ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => window.addEventListener(ev, present, { passive: true, capture: true }));
 
   window.TU.Pomodoro = Pomodoro;
 })();

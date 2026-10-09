@@ -104,8 +104,8 @@
         const t = s.tasks.find((x) => x.id === id);
         if (!t) return;
         t.snoozeUntil = Date.now() + minutes * 60000;
-        // o lembrete adiado substitui o aviso "Agora" do horário exato
-        if (t.date && t.time) s.notified[`${t.id}|${t.date}|${t.time}|d`] = Date.now();
+        // o lembrete adiado substitui o aviso "Agora" só se for tocar depois do horário da tarefa
+        if (t.date && t.time && t.snoozeUntil >= U.dueDate(t).getTime()) s.notified[`${t.id}|${t.date}|${t.time}|d`] = Date.now();
       }, { silent: true });
       UI.toast(`Ok! Lembro de novo em ${minutes} min.`, { icon: '😴', duration: 2500 });
     },

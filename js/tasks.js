@@ -179,6 +179,8 @@
           task.xpAwarded = reward.xp;
           task.coinsAwarded = reward.coins;
           // marca subtarefas restantes como feitas
+          // (lembra quais foram marcadas aqui, para desmarcar se a conclusão for desfeita)
+          task.autoDoneSubs = task.subtasks.filter((st) => !st.done).map((st) => st.id);
           task.subtasks.forEach((st) => (st.done = true));
           // recorrência: cria a próxima ocorrência
           if (task.recurrence && task.recurrence !== 'none' && !task.spawnedNext) {
@@ -201,6 +203,7 @@
                 recurDay: recurAnchor(task),
                 wasOnTime: false,
                 wasMorning: false,
+                autoDoneSubs: [],
                 subtasks: task.subtasks.map((st) => ({ ...st, id: U.uid(), done: false })),
               });
               s.tasks.push(next);
@@ -215,6 +218,9 @@
         Store.update((s) => {
           const task = s.tasks.find((x) => x.id === id);
           Game.onTaskUncompleted(s, task);
+          const auto = new Set(task.autoDoneSubs || []);
+          task.subtasks.forEach((st) => auto.has(st.id) && (st.done = false));
+          task.autoDoneSubs = [];
           task.done = false;
           task.completedAt = null;
           task.xpAwarded = 0;
@@ -258,7 +264,7 @@
     duplicate(id) {
       const t = Tasks.get(id);
       if (!t) return;
-      Tasks.create({ ...t, title: t.title + ' (cópia)', snoozeUntil: null, done: false, completedAt: null, pomodoros: 0, xpAwarded: 0, coinsAwarded: 0, spawnedNext: null, subtasks: t.subtasks.map((s) => ({ ...s, id: U.uid(), done: false })) });
+      Tasks.create({ ...t, title: t.title + ' (cópia)', snoozeUntil: null, done: false, completedAt: null, pomodoros: 0, xpAwarded: 0, coinsAwarded: 0, spawnedNext: null, spawnedFrom: null, updatedAt: null, recurDay: null, autoDoneSubs: [], subtasks: t.subtasks.map((s) => ({ ...s, id: U.uid(), done: false })) });
       UI.toast('Tarefa duplicada', { icon: '📄' });
     },
 
@@ -374,19 +380,21 @@
 
       return `
         <div class="task-item prio-${t.priority} ${t.done ? 'done' : ''} ${overdue ? 'overdue' : ''} ${compact ? 'compact' : ''}" data-id="${t.id}" style="--cat:${cat.color}">
-          <button class="check" data-action="toggle-task" data-id="${t.id}" aria-label="${t.done ? 'Desmarcar' : 'Concluir'} tarefa"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
-          <div class="task-body" data-action="edit-task" data-id="${t.id}" tabindex="0" role="button">
-            <div class="task-title">${t.emoji ? `<span class="task-emoji">${t.emoji}</span>` : ''}<span>${U.escape(t.title)}</span><span class="prio-dot" title="Prioridade ${PRIORITIES[t.priority].label}"></span></div>
-            <div class="task-meta">${meta.join('')}</div>
-            ${!compact && !t.done && t.subtasks.length ? `<ul class="subtasks-inline">${t.subtasks
+          <button class="check" data-action="toggle-task" data-id="${t.id}" aria-label="${t.done ? 'Desmarcar' : 'Concluir'}: ${U.escape(t.title)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+          <div class="task-main">
+            <div class="task-body" data-action="edit-task" data-id="${t.id}" tabindex="0" role="button">
+              <div class="task-title">${t.emoji ? `<span class="task-emoji" aria-hidden="true">${t.emoji}</span>` : ''}<span>${U.escape(t.title)}</span><span class="prio-dot" role="img" aria-label="Prioridade ${PRIORITIES[t.priority].label}" title="Prioridade ${PRIORITIES[t.priority].label}"></span></div>
+              <div class="task-meta">${meta.join('')}</div>
+            </div>
+            ${!compact && !t.done && t.subtasks.length ? `<ul class="subtasks-inline" aria-label="Subtarefas de ${U.escape(t.title)}">${t.subtasks
               .map(
                 (st) => `<li class="${st.done ? 'done' : ''}"><button class="sub-check" data-action="toggle-sub" data-task="${t.id}" data-sub="${st.id}" aria-pressed="${st.done}" aria-label="${st.done ? 'Desmarcar' : 'Concluir'} subtarefa: ${U.escape(st.title)}">${st.done ? '✓' : ''}</button><span>${U.escape(st.title)}</span></li>`
               )
               .join('')}</ul>` : ''}
           </div>
           <div class="task-actions">
-            ${!t.done ? `<button class="icon-btn" data-action="pomo-task" data-id="${t.id}" title="Iniciar Pomodoro">🍅</button>` : ''}
-            <button class="icon-btn" data-action="task-menu" data-id="${t.id}" title="Mais opções">⋯</button>
+            ${!t.done ? `<button class="icon-btn" data-action="pomo-task" data-id="${t.id}" title="Iniciar Pomodoro" aria-label="Iniciar Pomodoro: ${U.escape(t.title)}">🍅</button>` : ''}
+            <button class="icon-btn" data-action="task-menu" data-id="${t.id}" title="Mais opções" aria-label="Mais opções: ${U.escape(t.title)}" aria-haspopup="menu" aria-expanded="false">⋯</button>
           </div>
         </div>`;
     },
@@ -408,7 +416,7 @@
           <form class="form task-form" autocomplete="off">
             <div class="field-row title-row">
               ${UI.emojiPicker(t.emoji)}
-              <input class="input input-lg" name="title" placeholder="O que você precisa fazer?" value="${U.escape(t.title === 'Tarefa' && !editing ? '' : t.title)}" required maxlength="200" autofocus>
+              <input class="input input-lg" name="title" aria-label="Título da tarefa" placeholder="O que você precisa fazer?" value="${U.escape(t.title === 'Tarefa' && !editing ? '' : t.title)}" required maxlength="200" autofocus>
             </div>
 
             <div class="field">
@@ -465,7 +473,7 @@
               <label>Subtarefas</label>
               <ul class="subtask-editor"></ul>
               <div class="input-group">
-                <input class="input" data-new-sub placeholder="Adicionar subtarefa e pressionar Enter">
+                <input class="input" data-new-sub aria-label="Nova subtarefa" placeholder="Adicionar subtarefa e pressionar Enter">
                 <button type="button" class="btn" data-add-sub>Adicionar</button>
               </div>
             </div>
@@ -495,9 +503,9 @@
             list.innerHTML = subtasks
               .map(
                 (st, i) => `<li>
-                <label class="mini-check"><input type="checkbox" data-sub-done="${i}" ${st.done ? 'checked' : ''}><span></span></label>
-                <input class="input input-sm" data-sub-title="${i}" value="${U.escape(st.title)}">
-                <button type="button" class="icon-btn" data-sub-rm="${i}" aria-label="Remover">✕</button>
+                <label class="mini-check"><input type="checkbox" data-sub-done="${i}" ${st.done ? 'checked' : ''} aria-label="Subtarefa concluída: ${U.escape(st.title)}"><span></span></label>
+                <input class="input input-sm" data-sub-title="${i}" value="${U.escape(st.title)}" aria-label="Subtarefa ${i + 1}">
+                <button type="button" class="icon-btn" data-sub-rm="${i}" aria-label="Remover subtarefa ${i + 1}">✕</button>
               </li>`
               )
               .join('');
@@ -599,34 +607,60 @@
       return m;
     },
 
+    /** Fecha o menu "⋯" aberto (também chamado ao trocar/redesenhar a tela). */
+    closeMenu() {
+      if (Tasks._menuClose) Tasks._menuClose(false);
+    },
+
     openMenu(id, anchor) {
       const t = Tasks.get(id);
       if (!t) return;
-      document.querySelectorAll('.popover').forEach((p) => p.remove());
+      Tasks.closeMenu();
       const pop = document.createElement('div');
       pop.className = 'popover';
+      pop.setAttribute('role', 'menu');
+      pop.setAttribute('aria-label', `Opções: ${t.title}`);
       pop.innerHTML = `
-        <button data-m="edit">✏️ Editar</button>
-        ${!t.done ? '<button data-m="pomo">🍅 Iniciar Pomodoro</button>' : ''}
-        <button data-m="today">📅 Mover para hoje</button>
-        <button data-m="tomorrow">➡️ Adiar para amanhã</button>
-        <button data-m="dup">📄 Duplicar</button>
-        <button data-m="del" class="danger">🗑️ Excluir</button>`;
+        <button role="menuitem" data-m="edit">✏️ Editar</button>
+        ${!t.done ? '<button role="menuitem" data-m="pomo">🍅 Iniciar Pomodoro</button>' : ''}
+        <button role="menuitem" data-m="today">📅 Mover para hoje</button>
+        <button role="menuitem" data-m="tomorrow">➡️ Adiar para amanhã</button>
+        <button role="menuitem" data-m="dup">📄 Duplicar</button>
+        <button role="menuitem" data-m="del" class="danger">🗑️ Excluir</button>`;
       document.body.appendChild(pop);
       const r = anchor.getBoundingClientRect();
       const pw = 210;
-      pop.style.top = Math.min(r.bottom + 6, innerHeight - pop.offsetHeight - 10) + 'px';
+      pop.style.top = Math.max(10, Math.min(r.bottom + 6, innerHeight - pop.offsetHeight - 10)) + 'px';
       pop.style.left = Math.max(10, Math.min(r.right - pw, innerWidth - pw - 10)) + 'px';
-      const close = () => {
+      anchor.setAttribute('aria-expanded', 'true');
+      const items = [...pop.querySelectorAll('[role=menuitem]')];
+      items[0].focus();
+
+      const close = (refocus = true) => {
         pop.remove();
         document.removeEventListener('mousedown', outside, true);
+        anchor.setAttribute('aria-expanded', 'false');
+        Tasks._menuClose = null;
+        if (refocus && anchor.isConnected) anchor.focus();
       };
-      const outside = (e) => !pop.contains(e.target) && close();
+      const outside = (e) => !pop.contains(e.target) && close(false);
+      Tasks._menuClose = close;
       setTimeout(() => document.addEventListener('mousedown', outside, true));
+      pop.addEventListener('keydown', (e) => {
+        const i = items.indexOf(document.activeElement);
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          close();
+        } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
+        } else if (e.key === 'Tab') close(false);
+      });
       pop.addEventListener('click', (e) => {
         const b = e.target.closest('[data-m]');
         if (!b) return;
-        close();
+        close(false);
         const a = b.dataset.m;
         if (a === 'edit') Tasks.openForm({ id });
         if (a === 'pomo') window.TU.Pomodoro.startForTask(id);
@@ -639,6 +673,7 @@
         if (a === 'del') Tasks.remove(id);
       });
     },
+
 
     /* ---------------- Tela "Tarefas" ---------------- */
     render(view) {
@@ -739,7 +774,7 @@
           <div class="filters-row">
             <div class="search">
               <span>🔎</span>
-              <input type="search" class="input" data-filter="q" placeholder="Buscar tarefas..." value="${U.escape(f.q)}">
+              <input type="search" class="input" data-filter="q" aria-label="Buscar tarefas" placeholder="Buscar tarefas..." value="${U.escape(f.q)}">
             </div>
             <select class="input" data-filter="category" aria-label="Categoria">
               <option value="all">Todas as categorias</option>
@@ -817,7 +852,6 @@
     Tasks.openForm({ defaults: d });
   };
   Actions['task-menu'] = (el) => Tasks.openMenu(el.dataset.id, el);
-  Actions['delete-task'] = (el) => Tasks.remove(el.dataset.id);
   Actions['toggle-sub'] = (el) => Tasks.toggleSubtask(el.dataset.task, el.dataset.sub);
   Actions['filter-status'] = (el) => {
     Tasks.filters.status = el.dataset.v;
@@ -838,7 +872,14 @@
     const ok = await UI.confirm({ title: `Mover ${list.length} tarefa${list.length > 1 ? 's' : ''} para hoje?`, text: 'Os horários são mantidos.', okText: 'Mover', icon: '➡️' });
     if (!ok) return;
     const ids = new Set(list.map((t) => t.id));
-    Store.update((s) => s.tasks.forEach((t) => ids.has(t.id) && (t.date = today)));
+    const now = new Date().toISOString();
+    Store.update((s) =>
+      s.tasks.forEach((t) => {
+        if (!ids.has(t.id)) return;
+        t.date = today;
+        t.updatedAt = now; // conta como editada (desfazer a anterior não a apaga)
+      })
+    );
     UI.toast('Tarefas reagendadas para hoje', { type: 'success', icon: '📅' });
   };
   Actions['clear-done'] = async () => {
