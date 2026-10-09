@@ -1,0 +1,25 @@
+{
+  "id": "./index.html",
+  "name": "TaskUp — Organizador Pessoal",
+  "short_name": "TaskUp",
+  "description": "Tarefas, rotina, lembretes e Pomodoro gamificados. 100% offline.",
+  "lang": "pt-BR",
+  "start_url": "./index.html#/dashboard",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f5f4fb",
+  "theme_color": "#7c5cff",
+  "categories": ["productivity", "lifestyle"],
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "shortcuts": [
+    { "name": "Minha Rotina", "url": "./index.html#/routine", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Tarefas", "url": "./index.html#/tasks", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Pomodoro", "url": "./index.html#/pomodoro", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
