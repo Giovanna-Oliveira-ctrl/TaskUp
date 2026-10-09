@@ -9,6 +9,7 @@
   const { U, Bus } = window.TU;
   const KEY = 'taskup:data:v1';
   const MIRROR_KEY = 'taskup:data:v1:mirror';
+  const MIRROR_AT_KEY = 'taskup:data:v1:mirror-at';
   const VERSION = 1;
 
   const DEFAULT_CATEGORIES = [
@@ -105,23 +106,6 @@
     };
   }
 
-  /** Mescla recursivamente valores padrão em objetos carregados (migração leve). */
-  function mergeDefaults(target, defaults) {
-    for (const k of Object.keys(defaults)) {
-      if (target[k] === undefined || target[k] === null) {
-        if (defaults[k] !== null) target[k] = JSON.parse(JSON.stringify(defaults[k]));
-        else if (target[k] === undefined) target[k] = null;
-      } else if (
-        typeof defaults[k] === 'object' &&
-        defaults[k] !== null &&
-        !Array.isArray(defaults[k]) &&
-        typeof target[k] === 'object'
-      ) {
-        mergeDefaults(target[k], defaults[k]);
-      }
-    }
-    return target;
-  }
 
   /* ---------- Sanitização (dados importados/corrompidos) ---------- */
   const RE_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -137,33 +121,75 @@
   const num = (v, def, min = 0, max = 1e9) => (Number.isFinite(+v) && v !== null && v !== '' ? Math.min(max, Math.max(min, +v)) : def);
   const isoOrNull = (v) => (typeof v === 'string' && !isNaN(Date.parse(v)) ? v : null);
   const color = (v, def = '#64748b') => (typeof v === 'string' && RE_COLOR.test(v) ? v : def);
+  /** Limites contra arquivos gigantes que travariam o app ou estourariam o armazenamento. */
+  const LIMITS = { tasks: 20000, categories: 100, subtasks: 100, days: 3660, notified: 5000 };
 
+  const own = (o, k) => !!o && Object.prototype.hasOwnProperty.call(o, k);
+  const bool = (v, def = false) => (typeof v === 'boolean' ? v : def);
+  const finiteOrNull = (v, min, max) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : null);
+
+  /** Monta uma tarefa NOVA só com os campos conhecidos (lista de permissões). */
   function sanitizeTask(t) {
-    if (!isId(t.id)) t.id = U.uid();
-    t.title = str(t.title, 300).trim() || 'Tarefa';
-    t.emoji = emoji(t.emoji);
-    t.notes = str(t.notes, 5000);
-    t.categoryId = isId(t.categoryId) ? String(t.categoryId) : 'cat-outros';
-    if (!PRIOS.includes(t.priority)) t.priority = 'medium';
-    if (!RECS.includes(t.recurrence)) t.recurrence = 'none';
-    t.date = typeof t.date === 'string' && RE_DATE.test(t.date) ? t.date : null;
-    t.time = typeof t.time === 'string' && RE_TIME.test(t.time) ? t.time : null;
-    t.duration = num(t.duration, 30, 0, 1440);
-    t.reminder = t.reminder === null || t.reminder === undefined || t.reminder === '' ? null : num(t.reminder, null, 0, 10080);
-    t.subtasks = (Array.isArray(t.subtasks) ? t.subtasks : [])
-      .filter((x) => x && typeof x === 'object')
-      .map((x) => ({ id: isId(x.id) ? String(x.id) : U.uid(), title: str(x.title, 300), done: !!x.done }));
-    t.done = !!t.done;
-    t.completedAt = isoOrNull(t.completedAt);
-    t.createdAt = isoOrNull(t.createdAt) || new Date().toISOString();
-    t.updatedAt = isoOrNull(t.updatedAt);
-    t.pomodoros = num(t.pomodoros, 0, 0, 1e6);
-    t.xpAwarded = num(t.xpAwarded, 0, 0, 1e4);
-    t.coinsAwarded = num(t.coinsAwarded, 0, 0, 1e4);
-    t.spawnedNext = isId(t.spawnedNext) ? String(t.spawnedNext) : null;
-    t.snoozeUntil = Number.isFinite(t.snoozeUntil) ? t.snoozeUntil : null;
-    t.recurDay = Number.isInteger(t.recurDay) && t.recurDay >= 1 && t.recurDay <= 31 ? t.recurDay : null;
-    return t;
+    return {
+      id: isId(t.id) ? t.id : U.uid(),
+      title: str(t.title, 300).trim() || 'Tarefa',
+      emoji: emoji(t.emoji),
+      notes: str(t.notes, 5000),
+      categoryId: isId(t.categoryId) ? t.categoryId : 'cat-outros',
+      priority: PRIOS.includes(t.priority) ? t.priority : 'medium',
+      date: typeof t.date === 'string' && RE_DATE.test(t.date) ? t.date : null,
+      time: typeof t.time === 'string' && RE_TIME.test(t.time) ? t.time : null,
+      duration: num(t.duration, 30, 0, 1440),
+      reminder: t.reminder === null || t.reminder === undefined || t.reminder === '' ? null : num(t.reminder, null, 0, 10080),
+      recurrence: RECS.includes(t.recurrence) ? t.recurrence : 'none',
+      recurDay: Number.isInteger(t.recurDay) && t.recurDay >= 1 && t.recurDay <= 31 ? t.recurDay : null,
+      subtasks: (Array.isArray(t.subtasks) ? t.subtasks : [])
+        .slice(0, LIMITS.subtasks)
+        .filter((x) => x && typeof x === 'object')
+        .map((x) => ({ id: isId(x.id) ? x.id : U.uid(), title: str(x.title, 300), done: x.done === true })),
+      done: t.done === true,
+      completedAt: isoOrNull(t.completedAt),
+      createdAt: isoOrNull(t.createdAt) || new Date().toISOString(),
+      updatedAt: isoOrNull(t.updatedAt),
+      pomodoros: num(t.pomodoros, 0, 0, 1e6),
+      xpAwarded: num(t.xpAwarded, 0, 0, 1e4),
+      coinsAwarded: num(t.coinsAwarded, 0, 0, 1e4),
+      spawnedNext: isId(t.spawnedNext) ? t.spawnedNext : null,
+      spawnedFrom: isId(t.spawnedFrom) ? t.spawnedFrom : null,
+      snoozeUntil: finiteOrNull(t.snoozeUntil, 0, 8.64e15),
+      wasOnTime: t.wasOnTime === true,
+      wasMorning: t.wasMorning === true,
+    };
+  }
+
+  /** Mapa { 'AAAA-MM-DD': número } — descarta chaves e valores inválidos. */
+  function dateMap(o, max = 1e7) {
+    const out = {};
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return out;
+    Object.keys(o)
+      .filter((k) => RE_DATE.test(k))
+      .slice(-LIMITS.days)
+      .forEach((k) => {
+        const v = num(o[k], 0, 0, max);
+        if (v) out[k] = v;
+      });
+    return out;
+  }
+
+  /** Configurações: só as chaves conhecidas, com o mesmo tipo do valor padrão. */
+  function sanitizeSettings(src, defaults) {
+    const out = {};
+    src = src && typeof src === 'object' && !Array.isArray(src) ? src : {};
+    Object.keys(defaults).forEach((k) => {
+      const d = defaults[k];
+      const v = own(src, k) ? src[k] : undefined;
+      if (d === null) out[k] = isoOrNull(v);
+      else if (typeof d === 'boolean') out[k] = bool(v, d);
+      else if (typeof d === 'number') out[k] = num(v, d, 0, 1e6);
+      else if (typeof d === 'string') out[k] = typeof v === 'string' ? v.slice(0, 40) : d;
+      else if (typeof d === 'object') out[k] = sanitizeSettings(v, d);
+    });
+    return out;
   }
 
   function sanitizeCategory(c) {
@@ -180,8 +206,9 @@
   }
 
   function normalizeTaskRaw(t) {
-    return Object.assign(
-      {
+    // espalhar ({...}) cria propriedades próprias: uma chave "__proto__" vira dado inerte
+    return {
+      ...{
         id: U.uid(),
         title: 'Tarefa',
         emoji: '',
@@ -204,8 +231,8 @@
         snoozeUntil: null,
         updatedAt: null,
       },
-      t
-    );
+      ...t,
+    };
   }
 
   let state = null;
@@ -236,7 +263,14 @@
         } catch (e) {
           console.error('Dados corrompidos', e);
           try {
-            U.storage.setItem(KEY + ':corrupted:' + Date.now(), raw);
+            // guarda só as 2 cópias corrompidas mais recentes (para diagnóstico)
+            U.storage
+              .keys()
+              .filter((k) => k && k.startsWith(KEY + ':corrupted:'))
+              .sort()
+              .slice(0, -1)
+              .forEach((k) => U.storage.removeItem(k));
+            U.storage.setItem(KEY + ':corrupted:' + Date.now(), raw.slice(0, 1048576));
           } catch (_) {}
           // recuperação automática: usa a cópia automática mais recente que estiver íntegra
           state = Store.recoverFromSnapshot() || defaultState();
@@ -254,7 +288,8 @@
     recoverFromSnapshot() {
       const candidates = [];
       const mirror = U.storage.getItem(MIRROR_KEY);
-      if (mirror) candidates.push({ label: 'espelho', raw: mirror, at: Infinity });
+      // a cópia espelho só vale se sua gravação foi concluída (tem horário registrado)
+      if (mirror) candidates.push({ label: 'espelho', raw: mirror, at: +U.storage.getItem(MIRROR_AT_KEY) || 0 });
       const prefix = 'taskup:snapshot:';
       U.storage.keys().forEach((k) => {
         if (!k || !k.startsWith(prefix)) return;
@@ -282,39 +317,104 @@
       if (!obj || typeof obj !== 'object' || !Array.isArray(obj.tasks)) {
         throw new Error('Formato inválido');
       }
-      const s = mergeDefaults(obj, defaultState());
-      s.tasks = s.tasks.filter((t) => t && typeof t === 'object').map(normalizeTask);
-      // ids duplicados quebrariam edição/remoção
+      const def = defaultState();
+
+      // tarefas (ids duplicados quebrariam edição/remoção)
       const seen = new Set();
-      s.tasks.forEach((t) => {
-        if (seen.has(t.id)) t.id = U.uid();
-        seen.add(t.id);
-      });
-      if (!Array.isArray(s.categories) || !s.categories.length) {
-        s.categories = DEFAULT_CATEGORIES.map((c) => ({ ...c }));
+      const tasks = obj.tasks
+        .slice(0, LIMITS.tasks)
+        .filter((t) => t && typeof t === 'object')
+        .map((t) => {
+          const task = normalizeTask(t);
+          if (seen.has(task.id)) task.id = U.uid();
+          seen.add(task.id);
+          return task;
+        });
+
+      // categorias
+      let categories = (Array.isArray(obj.categories) ? obj.categories : [])
+        .slice(0, LIMITS.categories)
+        .filter((c) => c && typeof c === 'object')
+        .map(sanitizeCategory);
+      const catIds = new Set();
+      categories = categories.filter((c) => !catIds.has(c.id) && catIds.add(c.id));
+      if (!categories.length) categories = def.categories;
+      if (!catIds.has('cat-outros')) categories.push({ ...DEFAULT_CATEGORIES[DEFAULT_CATEGORIES.length - 1] });
+
+      // configurações
+      const settings = sanitizeSettings(obj.settings, DEFAULT_SETTINGS);
+      if (!['auto', 'light', 'dark'].includes(settings.theme)) settings.theme = 'auto';
+      if (!RE_TIME.test(settings.dailySummaryTime)) settings.dailySummaryTime = '08:00';
+      settings.volume = num(settings.volume, 0.6, 0, 1);
+      settings.defaultReminder = own(obj.settings, 'defaultReminder') && obj.settings.defaultReminder === null ? null : num(settings.defaultReminder, 10, 0, 10080);
+      ['focus', 'short', 'long', 'longEvery'].forEach((k) => (settings.pomodoro[k] = num(settings.pomodoro[k], DEFAULT_SETTINGS.pomodoro[k], 1, 180)));
+
+      // jogo
+      const gi = obj.game && typeof obj.game === 'object' ? obj.game : {};
+      const G = window.TU.Game;
+      const achIds = G ? new Set(G.ACHIEVEMENTS.map((a) => a.id)) : null;
+      const misIds = G ? new Set(G.MISSION_POOL.map((m) => m.id)) : null;
+      const achievements = {};
+      if (gi.achievements && typeof gi.achievements === 'object') {
+        Object.keys(gi.achievements).forEach((k) => {
+          if (isId(k) && (!achIds || achIds.has(k)) && isoOrNull(gi.achievements[k])) achievements[k] = gi.achievements[k];
+        });
       }
-      s.categories = s.categories.filter((c) => c && typeof c === 'object').map(sanitizeCategory);
-      if (!s.categories.some((c) => c.id === 'cat-outros')) {
-        s.categories.push({ ...DEFAULT_CATEGORIES[DEFAULT_CATEGORIES.length - 1] });
+      const mi = gi.missions && typeof gi.missions === 'object' ? gi.missions : {};
+      const game = {
+        xp: num(gi.xp, 0, 0, 1e9),
+        coins: num(gi.coins, 0, -1e6, 1e9),
+        streak: num(gi.streak, 0, 0, 1e5),
+        bestStreak: num(gi.bestStreak, 0, 0, 1e5),
+        lastActiveDate: typeof gi.lastActiveDate === 'string' && RE_DATE.test(gi.lastActiveDate) ? gi.lastActiveDate : null,
+        totalCompleted: num(gi.totalCompleted, 0, 0, 1e9),
+        totalPomodoros: num(gi.totalPomodoros, 0, 0, 1e9),
+        focusMinutes: num(gi.focusMinutes, 0, 0, 1e9),
+        xpByDate: dateMap(gi.xpByDate),
+        completedByDate: dateMap(gi.completedByDate),
+        pomodorosByDate: dateMap(gi.pomodorosByDate),
+        focusByDate: dateMap(gi.focusByDate),
+        frozenDays: dateMap(gi.frozenDays, 1),
+        achievements,
+        missions: {
+          date: typeof mi.date === 'string' && RE_DATE.test(mi.date) ? mi.date : null,
+          list: (Array.isArray(mi.list) ? mi.list : [])
+            .filter((m) => m && typeof m === 'object' && isId(m.id) && (!misIds || misIds.has(m.id)))
+            .slice(0, 5)
+            .map((m) => ({ id: m.id, progress: num(m.progress, 0, 0, 1e6), claimed: m.claimed === true })),
+        },
+        weekly: {
+          week: gi.weekly && typeof gi.weekly.week === 'string' && RE_DATE.test(gi.weekly.week) ? gi.weekly.week : null,
+          claimed: !!(gi.weekly && gi.weekly.claimed === true),
+        },
+        unlocked: gi.unlocked,
+        inventory: gi.inventory,
+        boostUntil: gi.boostUntil,
+      };
+      // pomodoro
+      const pi = obj.pomodoro && typeof obj.pomodoro === 'object' ? obj.pomodoro : {};
+      const pomodoro = {
+        mode: ['focus', 'short', 'long'].includes(pi.mode) ? pi.mode : 'focus',
+        running: pi.running === true,
+        endAt: finiteOrNull(pi.endAt, 0, 8.64e15),
+        remaining: finiteOrNull(pi.remaining, 0, 86400),
+        taskId: isId(pi.taskId) ? pi.taskId : null,
+        length: finiteOrNull(pi.length, 0, 1440),
+        cycle: num(pi.cycle, 0, 0, 1e6),
+      };
+      if (pomodoro.running && !pomodoro.endAt) pomodoro.running = false;
+      // lembretes já avisados
+      const notified = {};
+      if (obj.notified && typeof obj.notified === 'object') {
+        Object.keys(obj.notified)
+          .slice(-LIMITS.notified)
+          .forEach((k) => {
+            if (k.length <= 200 && typeof obj.notified[k] === 'number' && Number.isFinite(obj.notified[k])) notified[k] = obj.notified[k];
+          });
       }
-      // configurações e jogo
-      const st = s.settings;
-      if (!['auto', 'light', 'dark'].includes(st.theme)) st.theme = 'auto';
-      st.name = str(st.name, 40);
-      if (!RE_TIME.test(st.dailySummaryTime)) st.dailySummaryTime = '08:00';
-      st.volume = num(st.volume, 0.6, 0, 1);
-      ['focus', 'short', 'long', 'longEvery'].forEach((k) => (st.pomodoro[k] = num(st.pomodoro[k], DEFAULT_SETTINGS.pomodoro[k], 1, 180)));
-      const g = s.game;
-      ['xp', 'streak', 'bestStreak', 'totalCompleted', 'totalPomodoros', 'focusMinutes'].forEach((k) => (g[k] = num(g[k], 0, 0, 1e9)));
-      g.coins = num(g.coins, 0, -1e6, 1e9);
-      if (window.TU.Shop) window.TU.Shop.validate(s);
-      if (g.lastActiveDate && !RE_DATE.test(g.lastActiveDate)) g.lastActiveDate = null;
-      ['xpByDate', 'completedByDate', 'pomodorosByDate', 'focusByDate', 'achievements', 'notified'].forEach((k) => {
-        const o = k === 'notified' ? s : g;
-        if (!o[k] || typeof o[k] !== 'object' || Array.isArray(o[k])) o[k] = {};
-      });
-      if (!Array.isArray(g.missions.list)) g.missions = { date: null, list: [] };
-      s.version = VERSION;
+
+      const s = { app: 'TaskUp', version: VERSION, createdAt: isoOrNull(obj.createdAt) || def.createdAt, settings, categories, tasks, game, pomodoro, notified };
+      if (window.TU.Shop) window.TU.Shop.validate(s); // itens da loja, inventário e reforço de XP
       return s;
     },
 
@@ -332,17 +432,50 @@
 
     saveNow() {
       dirty = false;
-      try {
-        const json = JSON.stringify(state);
-        U.storage.setItem(KEY, json);
-        // cópia espelho: se a principal se corromper, o app recupera o último estado
+      if (!state) return false;
+      const json = JSON.stringify(state);
+      // 1) dados principais: se o espaço acabar, libera cópias antigas e tenta de novo
+      let saved = false;
+      for (let attempt = 0; attempt < 8 && !saved; attempt++) {
         try {
-          U.storage.setItem(MIRROR_KEY, json);
-        } catch (_) {}
-      } catch (e) {
-        console.error('Falha ao salvar', e);
-        Bus.emit('toast', { text: 'Não foi possível salvar os dados (armazenamento cheio?)', type: 'error' });
+          U.storage.setItem(KEY, json);
+          saved = true;
+        } catch (e) {
+          if (!Store.freeSpace()) break;
+        }
       }
+      if (!saved) {
+        dirty = true; // continua pendente: tenta de novo na próxima alteração
+        console.error('Falha ao salvar: armazenamento cheio');
+        Bus.emit('toast', { text: 'Armazenamento cheio: não foi possível salvar. Exporte um backup e apague tarefas concluídas antigas.', type: 'error', duration: 10000 });
+        return false;
+      }
+      // 2) cópia espelho (com horário): se a principal se corromper, o app recupera o último estado
+      try {
+        U.storage.removeItem(MIRROR_AT_KEY); // marca "gravação em andamento"
+        U.storage.setItem(MIRROR_KEY, json);
+        U.storage.setItem(MIRROR_AT_KEY, String(Date.now()));
+      } catch (_) {
+        U.storage.removeItem(MIRROR_KEY); // espelho incompleto não serve para recuperar
+      }
+      return true;
+    },
+
+    /** Libera espaço: cópias "corrompidas" antigas, depois a cópia automática mais antiga, por fim o espelho. */
+    freeSpace() {
+      const corrupted = U.storage.keys().filter((k) => k && k.startsWith(KEY + ':corrupted:'));
+      if (corrupted.length) {
+        U.storage.removeItem(corrupted.sort()[0]);
+        return true;
+      }
+      const B = window.TU.Backup;
+      if (B && B.dropOldestSnapshot()) return true;
+      if (U.storage.getItem(MIRROR_KEY) !== null) {
+        U.storage.removeItem(MIRROR_KEY);
+        U.storage.removeItem(MIRROR_AT_KEY);
+        return true;
+      }
+      return false;
     },
 
     /** Altera o estado e notifica a interface. */
@@ -387,6 +520,11 @@
   // Outra aba (ou o app instalado) alterou os dados: recarrega
   window.addEventListener('storage', (e) => {
     if (e.key !== KEY || !e.newValue || !state) return;
+    // esta aba tem alterações ainda não gravadas: grava as dela (a última gravação vence)
+    if (dirty) {
+      Store.saveNow();
+      return;
+    }
     try {
       state = Store.hydrate(JSON.parse(e.newValue));
       dirty = false;

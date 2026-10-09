@@ -149,7 +149,7 @@
 
   function confetti({ count = 120, origin = null, effect = null } = {}) {
     const st = window.TU.Store && window.TU.Store.state;
-    const symbols = EFFECTS[effect || (st && st.settings.effect)] || null;
+    const symbols = U.own(EFFECTS, effect || (st && st.settings.effect)) || null;
     if (symbols) count = Math.round(count * 0.6); // emojis são maiores
     const canvas = document.getElementById('confetti');
     if (!canvas) return;
@@ -326,8 +326,8 @@
       const ac = ctx();
       if (!ac) return;
       const vol = (s ? s.settings.volume : 0.6) * 0.35;
-      let seq = SOUNDS[name] || SOUNDS.click;
-      if (name === 'complete') seq = PACKS[pack || (s && s.settings.soundPack)] || SOUNDS.complete;
+      let seq = U.own(SOUNDS, name) || SOUNDS.click;
+      if (name === 'complete') seq = U.own(PACKS, pack || (s && s.settings.soundPack)) || SOUNDS.complete;
       const loud = ['levelup', 'coin'].includes(name) || (name === 'complete' && ['retro', 'fanfare'].includes(pack || (s && s.settings.soundPack)));
       const v = loud ? vol * 0.5 : vol;
       seq.forEach(([f, st, d, type]) => tone(ac, f, st, d, { type, vol: Math.max(0.0002, v) }));

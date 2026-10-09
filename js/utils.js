@@ -150,6 +150,10 @@
     clamp(v, min, max) {
       return Math.max(min, Math.min(max, v));
     },
+    /** Lê obj[key] só se for chave própria (nunca "constructor", "__proto__", "toString"...). */
+    own(obj, key) {
+      return obj != null && typeof key === 'string' && Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined;
+    },
     pick(arr) {
       return arr[Math.floor(Math.random() * arr.length)];
     },

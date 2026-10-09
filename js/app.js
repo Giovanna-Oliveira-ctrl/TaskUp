@@ -38,7 +38,7 @@
     },
 
     go(view, opts = {}) {
-      if (!VIEWS[view]) view = 'dashboard';
+      if (!U.own(VIEWS, view)) view = 'dashboard';
       if (view === 'routine' && opts.resetDate) TU.Routine.date = U.today();
       current = view;
       // o endereço (#/tela) é só um bônus: em visualizadores restritos pode ser bloqueado
@@ -51,7 +51,7 @@
 
     fromHash() {
       const v = (location.hash.match(/^#\/(\w+)/) || [])[1];
-      return VIEWS[v] ? v : 'dashboard';
+      return U.own(VIEWS, v) ? v : 'dashboard';
     },
 
     render(scrollTop = false) {
@@ -181,7 +181,7 @@
       const root = document.documentElement;
       const dark = st.theme === 'dark' || (st.theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
       root.dataset.theme = dark ? 'dark' : 'light';
-      const a = Game.ACCENTS[st.accent] || Game.ACCENTS.violeta;
+      const a = U.own(Game.ACCENTS, st.accent) || Game.ACCENTS.violeta;
       root.style.setProperty('--accent', a.color);
       root.style.setProperty('--accent-2', a.color2);
       root.style.setProperty('--accent-soft', U.hexToRgba(a.color, dark ? 0.22 : 0.12));
@@ -281,10 +281,18 @@
 
     /* ---------- Inicialização ---------- */
     init() {
+      // cada etapa isolada: um problema em uma não impede as demais (lembretes, cópias etc.)
+      const safe = (label, fn) => {
+        try {
+          fn();
+        } catch (e) {
+          console.error(`[TaskUp] falha em "${label}"`, e);
+        }
+      };
       Store.load();
-      App.applyTheme();
-      Game.ensureMissions();
-      TU.Shop.applyFreezes();
+      safe('tema', App.applyTheme);
+      safe('missões', Game.ensureMissions);
+      safe('congeladores', TU.Shop.applyFreezes);
 
       // links de navegação
       const navHtml = NAV_ORDER.map(
@@ -317,23 +325,25 @@
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', App.applyTheme);
 
       App.bindEvents();
-      App.render(true);
+      safe('tela', () => App.render(true));
 
-      // laços de atualização
-      setInterval(Pomodoro.tick, 500);
-      setInterval(App.minuteTick, 30000);
-      Notify.start();
-      Backup.autoSnapshot();
+      // laços de atualização (cada tique também isolado)
+      setInterval(() => safe('pomodoro', Pomodoro.tick), 500);
+      setInterval(() => safe('minuto', App.minuteTick), 30000);
+      safe('lembretes', Notify.start);
+      safe('cópia automática', Backup.autoSnapshot);
 
       // Pomodoro que terminou com o app fechado
-      const p = Store.state.pomodoro;
-      if (p.running && p.endAt && p.endAt <= Date.now()) Pomodoro.finish(true);
+      safe('pomodoro pendente', () => {
+        const p = Store.state.pomodoro;
+        if (p.running && p.endAt && p.endAt <= Date.now()) Pomodoro.finish(true);
+      });
 
-      setTimeout(() => App.onboarding(), 400);
-      App.protectData();
+      setTimeout(() => safe('boas-vindas', App.onboarding), 400);
+      safe('proteção de dados', App.protectData);
       if (Store.recoveredFrom) UI.toast(`Os dados salvos estavam danificados e foram recuperados automaticamente da ${Store.recoveredFrom}.`, { type: 'error', icon: '🛟', duration: 12000 });
       if (!Store.storageOk) UI.toast('Modo de visualização: o armazenamento está bloqueado aqui, então os dados não serão salvos. Baixe o arquivo e abra no navegador para salvar.', { type: 'error', duration: 10000 });
-      App.registerSW();
+      safe('service worker', App.registerSW);
     },
 
     /** Pede armazenamento persistente e lembra de fazer backup periodicamente. */

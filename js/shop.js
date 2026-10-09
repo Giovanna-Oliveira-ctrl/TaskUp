@@ -133,11 +133,13 @@
     tab: 'accent',
 
     owned(kind, key) {
-      return (g().unlocked[KINDS[kind].unlock] || []).includes(key);
+      const k = U.own(KINDS, kind);
+      return !!k && (g().unlocked[k.unlock] || []).includes(key);
     },
 
     equipped(kind) {
-      return Store.state.settings[KINDS[kind].setting];
+      const k = U.own(KINDS, kind);
+      return k ? Store.state.settings[k.setting] : undefined;
     },
 
     /** Quantos cosméticos o usuário possui (sem contar os gratuitos). */
@@ -146,7 +148,7 @@
     },
 
     titleText() {
-      const t = TITLES[Store.state.settings.title];
+      const t = U.own(TITLES, Store.state.settings.title);
       return t && Store.state.settings.title !== 'none' ? t.name : '';
     },
 
@@ -160,15 +162,21 @@
       game.unlocked = game.unlocked && typeof game.unlocked === 'object' ? game.unlocked : {};
       Object.values(KINDS).forEach((k) => {
         const list = Array.isArray(game.unlocked[k.unlock]) ? game.unlocked[k.unlock] : [];
-        game.unlocked[k.unlock] = [...new Set(list.filter((x) => typeof x === 'string' && k.items[x]))];
+        game.unlocked[k.unlock] = [...new Set(list.filter((x) => U.own(k.items, x)))];
         if (!game.unlocked[k.unlock].includes(k.def)) game.unlocked[k.unlock].unshift(k.def);
-        if (!k.items[s.settings[k.setting]] || !game.unlocked[k.unlock].includes(s.settings[k.setting])) s.settings[k.setting] = k.def;
+        if (!U.own(k.items, s.settings[k.setting]) || !game.unlocked[k.unlock].includes(s.settings[k.setting])) s.settings[k.setting] = k.def;
       });
-      game.inventory = game.inventory && typeof game.inventory === 'object' ? game.inventory : {};
-      const f = +game.inventory.freeze;
+      const inv = game.inventory && typeof game.inventory === 'object' ? game.inventory : {};
+      const f = typeof inv.freeze === 'number' ? inv.freeze : 0;
+      game.inventory = {};
       game.inventory.freeze = Number.isFinite(f) ? Math.max(0, Math.min(POWERUPS.freeze.max, Math.floor(f))) : 0;
-      game.boostUntil = Number.isFinite(+game.boostUntil) ? +game.boostUntil : 0;
+      // o reforço dura no máximo algumas horas a partir de agora (impede "XP em dobro eterno" por importação)
+      const b = typeof game.boostUntil === 'number' && Number.isFinite(game.boostUntil) ? game.boostUntil : 0;
+      game.boostUntil = Math.min(b, Date.now() + 24 * 3600000);
       if (!game.frozenDays || typeof game.frozenDays !== 'object' || Array.isArray(game.frozenDays)) game.frozenDays = {};
+      const un = {};
+      Object.values(KINDS).forEach((k) => (un[k.unlock] = game.unlocked[k.unlock]));
+      game.unlocked = un; // descarta listas desconhecidas
     },
 
     canPay(price) {
@@ -178,8 +186,8 @@
     },
 
     buy(kind, key) {
-      const k = KINDS[kind];
-      const item = k && k.items[key];
+      const k = U.own(KINDS, kind);
+      const item = k && U.own(k.items, key);
       if (!item || Shop.owned(kind, key) || !Shop.canPay(item.price)) return;
       Store.update((s) => {
         s.game.coins -= item.price;
@@ -194,8 +202,8 @@
     },
 
     equip(kind, key) {
-      const k = KINDS[kind];
-      if (!k || !k.items[key] || !Shop.owned(kind, key)) return;
+      const k = U.own(KINDS, kind);
+      if (!k || !U.own(k.items, key) || !Shop.owned(kind, key)) return;
       Store.update((s) => (s.settings[k.setting] = key));
       Bus.emit('theme');
       if (kind === 'sound') Sound.play('complete');
@@ -209,7 +217,7 @@
 
     /* ---------- Poderes ---------- */
     buyPowerup(key) {
-      const p = POWERUPS[key];
+      const p = U.own(POWERUPS, key);
       if (!p) return;
       if (key === 'freeze' && (g().inventory.freeze || 0) >= p.max) {
         UI.toast(`Você já tem o máximo de ${p.max} congeladores.`, { icon: '🧊' });
@@ -311,7 +319,7 @@
         case 'mascot':
           return `<div class="mascot-big">${key}</div>`;
         case 'effect':
-          return `<div class="effect-preview">${(UI.EFFECTS[key] || ['🎊']).slice(0, 3).join('')}</div>`;
+          return `<div class="effect-preview">${(U.own(UI.EFFECTS, key) || ['🎊']).slice(0, 3).join('')}</div>`;
         case 'sound':
           return `<div class="mascot-big">${['🎵', '🫧', '🔔', '👾', '🎹', '🪕', '🎺'][Object.keys(SOUNDS).indexOf(key)] || '🎵'}</div>`;
         case 'title':
@@ -398,7 +406,7 @@
   };
 
   Actions['shop-tab'] = (el) => {
-    Shop.tab = el.dataset.tab;
+    Shop.tab = U.own(KINDS, el.dataset.tab) || el.dataset.tab === 'powerup' ? el.dataset.tab : 'accent';
     Bus.emit('rerender');
   };
   Actions['buy'] = (el) => Shop.buy(el.dataset.kind, el.dataset.key);

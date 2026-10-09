@@ -3,7 +3,7 @@
    Cache "offline-first" de todos os arquivos do app.
    Altere CACHE_VERSION ao publicar mudanças.
    ========================================================= */
-const CACHE_VERSION = 'taskup-v3';
+const CACHE_VERSION = 'taskup-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -38,7 +38,8 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_VERSION)
-      .then((cache) => cache.addAll(ASSETS))
+      // cache: 'reload' ignora o cache HTTP do navegador: instala sempre os arquivos novos
+      .then((cache) => cache.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
       .then(() => self.skipWaiting())
   );
 });

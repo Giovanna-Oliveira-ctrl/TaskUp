@@ -4,14 +4,16 @@
    - Chave: PBKDF2-SHA256 (310.000 iterações, sal aleatório de 16 bytes)
    - Cifra: AES-256-GCM (IV aleatório de 12 bytes a cada gravação;
      o GCM também detecta qualquer alteração nos dados cifrados)
-   A senha nunca é armazenada; a chave fica só na memória
-   enquanto o app está desbloqueado e não pode ser exportada.
+   Usada para proteger (opcionalmente) os arquivos de backup.
+   A senha nunca é armazenada e a chave não pode ser exportada.
    ========================================================= */
 (function () {
   'use strict';
 
   const subtle = window.crypto && window.crypto.subtle;
   const ITERATIONS = 310000;
+  const MIN_ITER = 100000;
+  const MAX_ITER = 2000000;
   const enc = new TextEncoder();
   const dec = new TextDecoder();
 
@@ -36,6 +38,18 @@
 
     isEnvelope(obj) {
       return !!(obj && typeof obj === 'object' && obj.taskup === 'enc' && typeof obj.data === 'string' && typeof obj.iv === 'string' && typeof obj.salt === 'string');
+    },
+
+    /** Estrutura válida (base64 e tamanhos corretos)? Evita "senha incorreta" para arquivo danificado. */
+    validEnvelope(env) {
+      const b64 = /^[A-Za-z0-9+/]+={0,2}$/;
+      return (
+        Crypto.isEnvelope(env) &&
+        b64.test(env.salt) && fromB64(env.salt).length >= 16 &&
+        b64.test(env.iv) && fromB64(env.iv).length === 12 &&
+        b64.test(env.data) && env.data.length >= 24 &&
+        (env.iter === undefined || (Number.isInteger(env.iter) && env.iter >= MIN_ITER && env.iter <= MAX_ITER))
+      );
     },
 
     newSalt() {
@@ -74,7 +88,8 @@
     },
 
     async decryptWithPassword(password, envelope) {
-      const iter = Number.isInteger(envelope.iter) && envelope.iter >= 10000 && envelope.iter <= 5000000 ? envelope.iter : ITERATIONS;
+      // o número de iterações vem do arquivo: limitado para um arquivo malicioso não travar o app
+      const iter = Number.isInteger(envelope.iter) && envelope.iter >= MIN_ITER && envelope.iter <= MAX_ITER ? envelope.iter : ITERATIONS;
       const key = await Crypto.deriveKey(password, envelope.salt, iter);
       return { text: await Crypto.decrypt(key, envelope), vault: { key, salt: envelope.salt, iter } };
     },

@@ -12,7 +12,7 @@
   'use strict';
 
   const { U, UI, Crypto } = window.TU;
-  const MIN_LENGTH = 6;
+  const MIN_LENGTH = 8; // senha de backup: o arquivo pode ser atacado offline sem limite de tentativas
   const STRENGTH = [
     ['Muito fraca', '#ef4444'],
     ['Fraca', '#f97316'],
@@ -110,7 +110,11 @@
     },
 
     privacyList(snaps = 0) {
-      return `<ul class="privacy-list">
+      const fileWarn =
+        location.protocol === 'file:'
+          ? `<li>⚠️ <strong>Aberto como arquivo:</strong> neste modo o navegador compartilha o armazenamento com outros arquivos HTML do computador. <strong>Não abra arquivos .html desconhecidos (ex.: anexos de e-mail) neste mesmo navegador.</strong> Para isolamento total, use o app instalado (pelo endereço localhost/https).</li>`
+          : '';
+      return `<ul class="privacy-list">${fileWarn}
         <li>📵 <strong>Sem rede:</strong> o app é proibido de fazer qualquer conexão (política de segurança de conteúdo), então nenhum dado sai do aparelho.</li>
         <li>🧱 <strong>Sem código externo:</strong> só os arquivos do próprio app podem ser executados.</li>
         <li>🧼 <strong>Dados validados:</strong> backups importados são verificados e limpos antes de entrar no app.</li>
