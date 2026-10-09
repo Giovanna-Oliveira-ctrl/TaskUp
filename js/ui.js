@@ -55,7 +55,7 @@
       const el = document.querySelector(sel);
       if (el) el.inert = !!top;
     });
-    stack.forEach((m) => (m.wrap.inert = m !== top || m.closed));
+    stack.forEach((m) => (m.wrap.inert = m !== top));
   }
 
   let modalSeq = 0;
@@ -91,9 +91,9 @@
       close(result) {
         if (api.closed) return;
         api.closed = true;
-        // bloqueia novos cliques/Enter durante a animação de saída (evita envio duplo)
+        // durante a animação de saída a janela continua por cima e "engole" cliques/Enter
+        // (se ficasse inerte, o 2º clique de um duplo clique atravessaria até a tela de trás)
         wrap.classList.add('closing');
-        wrap.inert = true;
         wrap.classList.remove('show');
         const i = stack.indexOf(api);
         if (i >= 0) stack.splice(i, 1);
@@ -109,6 +109,12 @@
     };
     stack.push(api);
     syncInert();
+    const swallow = (e) => {
+      if (!api.closed) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    ['click', 'mousedown', 'pointerdown', 'keydown', 'submit'].forEach((ev) => wrap.addEventListener(ev, swallow, true));
     wrap.addEventListener('mousedown', (e) => {
       if (e.target === wrap) api.close();
     });
